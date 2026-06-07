@@ -22,9 +22,9 @@ export async function onRequest(context) {
         // 对前端隐藏实际密码值，返回占位符
         // 前端只有在用户修改密码时才会发送新密码
         const maskedSettings = JSON.parse(JSON.stringify(settings));
-        if (maskedSettings.auth.admin?.adminPassword) {
-            maskedSettings.auth.admin._hasPassword = true;
-            maskedSettings.auth.admin.adminPassword = ''; // 不向前端暴露密码/哈希
+        if (maskedSettings.auth?.password) {
+            maskedSettings.auth._hasPassword = true;
+            maskedSettings.auth.password = ''; // 不向前端暴露密码/哈希
         }
 
         return new Response(JSON.stringify(maskedSettings), {
@@ -45,38 +45,31 @@ export async function onRequest(context) {
         settings.upload = newSettings.upload || settings.upload
         settings.access = newSettings.access || settings.access
 
-        // 处理认证设置：空密码表示不修改，_clear 标记表示清除凭据
-        // 单用户单角色：凭据统一存于 auth.admin（唯一用户的用户名/密码）
+        // 处理认证设置：空密码表示不修改，_clear 标记表示清除密码
+        // 单用户 · 纯密码：凭据以 auth.password 为准
         let credentialsChanged = false;
 
         if (newSettings.auth) {
-            if (newSettings.auth.admin) {
-                if (newSettings.auth.admin._clear) {
-                    // 显式清除密码和用户名
-                    newSettings.auth.admin.adminPassword = '';
-                    newSettings.auth.admin.adminUsername = '';
-                    credentialsChanged = true;
-                } else if (newSettings.auth.admin.adminPassword === '' || newSettings.auth.admin.adminPassword === undefined) {
-                    // 密码为空，保留原密码
-                    newSettings.auth.admin.adminPassword = settings.auth.admin.adminPassword;
-                } else {
-                    credentialsChanged = true;
-                }
-                delete newSettings.auth.admin._clear;
-                if (newSettings.auth.admin.adminUsername !== undefined) {
-                    settings.auth.admin.adminUsername = newSettings.auth.admin.adminUsername;
-                }
-                settings.auth.admin.adminPassword = newSettings.auth.admin.adminPassword;
+            if (newSettings.auth._clear) {
+                // 显式清除密码
+                settings.auth.password = '';
+                credentialsChanged = true;
+            } else if (newSettings.auth.password === '' || newSettings.auth.password === undefined) {
+                // 密码为空，保留原密码
+            } else {
+                settings.auth.password = newSettings.auth.password;
+                credentialsChanged = true;
             }
         }
 
         // 对密码进行哈希处理（如果是新的明文密码）
-        if (settings.auth.admin?.adminPassword && !isHashed(settings.auth.admin.adminPassword)) {
-            settings.auth.admin.adminPassword = await hashPassword(settings.auth.admin.adminPassword);
+        if (settings.auth?.password && !isHashed(settings.auth.password)) {
+            settings.auth.password = await hashPassword(settings.auth.password);
         }
 
         // 清理前端标记字段
-        delete settings.auth.admin?._hasPassword;
+        delete settings.auth?._hasPassword;
+        delete settings.auth?._clear;
 
         // 写入数据库
         await db.put('manage@sysConfig@security', JSON.stringify(settings))
@@ -104,13 +97,11 @@ export async function getSecurityConfig(db, env) {
     const settingsStr = await db.get('manage@sysConfig@security')
     const settingsKV = settingsStr ? JSON.parse(settingsStr) : {}
 
-    // 认证管理（单用户单角色：唯一凭据存于 auth.admin）
+    // 认证管理（单用户 · 纯密码：唯一凭据存于 auth.password）
     const kvAuth = settingsKV.auth || {}
     const auth = {
-        admin: {
-            adminUsername: kvAuth.admin?.adminUsername ?? env.BASIC_USER ?? '',
-            adminPassword: kvAuth.admin?.adminPassword ?? env.BASIC_PASS ?? '',
-        }
+        // 未配置任何密码时，回退到默认密码 hammybox（用户应在登录后尽快修改）
+        password: kvAuth.password ?? env.BASIC_PASS ?? 'hammybox',
     }
     settings.auth = auth
 

@@ -178,7 +178,7 @@ export function generateSessionToken() {
  * @param {Object} db - 数据库实例
  * @param {string} plainPassword - 用户输入的明文密码
  * @param {string} storedPassword - 当前存储的密码/哈希
- * @param {string} configPath - 配置路径，如 'auth.admin.adminPassword'
+ * @param {string} configPath - 配置路径，如 'auth.password'
  */
 export async function rehashIfNeeded(db, plainPassword, storedPassword, configPath) {
     if (!storedPassword || (storedPassword.startsWith(HASH_PREFIX_PBKDF2) && !needsRehash(storedPassword))) {
@@ -189,7 +189,7 @@ export async function rehashIfNeeded(db, plainPassword, storedPassword, configPa
         if (!settingsStr) return;
         const settings = JSON.parse(settingsStr);
 
-        // 按路径定位字段，如 'auth.admin.adminPassword'
+        // 按路径定位字段，如 'auth.password'
         const keys = configPath.split('.');
         let target = settings;
         for (let i = 0; i < keys.length - 1; i++) {

@@ -12,15 +12,14 @@ const AUTHORIZED = { authorized: true };
 const UNAUTHORIZED = { authorized: false };
 
 /**
- * 是否已配置登录凭据（用户名或密码任一已设置）
+ * 是否已配置登录凭据（纯密码：密码已设置即视为已初始化）
  * @param {Object} env - 环境变量
  * @returns {Promise<boolean>}
  */
 export async function isAuthConfigured(env) {
     const securityConfig = await fetchSecurityConfig(env);
-    const username = securityConfig.auth?.admin?.adminUsername;
-    const password = securityConfig.auth?.admin?.adminPassword;
-    return !!(username && username.trim()) || !!(password && password.trim());
+    const password = securityConfig.auth?.password;
+    return !!(password && password.trim());
 }
 
 /**

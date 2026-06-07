@@ -15,10 +15,9 @@ const COOKIE_NAME = 'hammybox_session';
 /**
  * 创建新会话
  * @param {Object} env - 环境变量
- * @param {string} [username] - 用户名
  * @returns {Promise<{token: string, cookie: string}>}
  */
-export async function createSession(env, username = '') {
+export async function createSession(env) {
     // 读取安全策略配置
     const securityConfig = await fetchSecurityConfig(env);
     const accessConfig = securityConfig.access || {};
@@ -29,7 +28,6 @@ export async function createSession(env, username = '') {
     const db = getDatabase(env);
     const token = generateSessionToken();
     const sessionData = {
-        username,
         createdAt: Date.now(),
         expiresAt: Date.now() + maxAge * 1000,
     };
