@@ -12,14 +12,14 @@ import { D1Database } from './d1Database.js';
  */
 export function createDatabaseAdapter(env) {
     // 检查是否配置了数据库
-    if (env.cffb_kv && typeof env.cffb_kv.get === 'function') {
+    if (env.hammybox_kv && typeof env.hammybox_kv.get === 'function') {
         // 使用KV存储
-        return new KVAdapter(env.cffb_kv);
-    } else if (env.cffb_d1 && typeof env.cffb_d1.prepare === 'function') {
+        return new KVAdapter(env.hammybox_kv);
+    } else if (env.hammybox_d1 && typeof env.hammybox_d1.prepare === 'function') {
         // 使用D1数据库
-        return new D1Database(env.cffb_d1);
+        return new D1Database(env.hammybox_d1);
     } else {
-        console.error('No database configured. Please configure either KV (env.cffb_kv) or D1 (env.cffb_d1).');
+        console.error('No database configured. Please configure either KV (env.hammybox_kv) or D1 (env.hammybox_d1).');
         return null;
     }
 }
@@ -148,7 +148,7 @@ class KVAdapter {
 export function getDatabase(env) {
     var adapter = createDatabaseAdapter(env);
     if (!adapter) {
-        throw new Error('Database not configured. Please configure D1 database (env.cffb_d1) or KV storage (env.cffb_kv).');
+        throw new Error('Database not configured. Please configure D1 database (env.hammybox_d1) or KV storage (env.hammybox_kv).');
     }
     return adapter;
 }
@@ -159,8 +159,8 @@ export function getDatabase(env) {
  * @returns {Object} 配置信息
  */
 export function checkDatabaseConfig(env) {
-    var hasD1 = env.cffb_d1 && typeof env.cffb_d1.prepare === 'function';
-    var hasKV = env.cffb_kv && typeof env.cffb_kv.get === 'function';
+    var hasD1 = env.hammybox_d1 && typeof env.hammybox_d1.prepare === 'function';
+    var hasKV = env.hammybox_kv && typeof env.hammybox_kv.get === 'function';
 
     return {
         hasD1: hasD1,

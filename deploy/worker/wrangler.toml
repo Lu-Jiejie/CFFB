@@ -10,7 +10,7 @@
 # GitHub Actions 部署时会自动从 Secrets/Variables 生成此文件，
 # 无需手动编辑。详见 .github/workflows/deploy-worker.yml
 
-name = "cffb"
+name = "hammybox"
 main = "index.js"
 compatibility_date = "2024-08-21"
 
@@ -25,14 +25,14 @@ not_found_handling = "single-page-application"
 # TG_CHAT_ID = ""
 
 # [[d1_databases]]
-# binding = "cffb_d1"
-# database_name = "cffb_d1"
+# binding = "hammybox_d1"
+# database_name = "hammybox_d1"
 # database_id = ""
 
 # [[r2_buckets]]
-# binding = "cffb_r2"
+# binding = "hammybox_r2"
 # bucket_name = ""
 
 # [[kv_namespaces]]
-# binding = "cffb_kv"
+# binding = "hammybox_kv"
 # id = ""

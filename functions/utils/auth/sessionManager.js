@@ -10,7 +10,7 @@ import { fetchSecurityConfig } from '../sysConfig.js';
 const SESSION_PREFIX = 'manage@session@';
 
 // 会话 Cookie 名称
-const COOKIE_NAME = 'cffb_session';
+const COOKIE_NAME = 'hammybox_session';
 
 /**
  * 创建新会话
@@ -43,7 +43,7 @@ export async function createSession(env, username = '') {
 }
 
 /**
- * 验证会话（读取 cffb_session Cookie）
+ * 验证会话（读取 hammybox_session Cookie）
  * @param {Object} env - 环境变量
  * @param {Request} request - 请求对象
  * @returns {Promise<{valid: boolean, session?: Object}>}

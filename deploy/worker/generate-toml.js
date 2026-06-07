@@ -3,7 +3,7 @@
  * 用于 GitHub Actions 部署，从 Secrets/Variables 读取配置
  * 
  * 环境变量：
- *   WORKER_NAME      - Worker 名称（默认 cffb）
+ *   WORKER_NAME      - Worker 名称（默认 hammybox）
  *   D1_DATABASE_ID   - D1 数据库 ID
  *   KV_NAMESPACE_ID  - KV 命名空间 ID
  *   R2_BUCKET_NAME   - R2 存储桶名称
@@ -18,7 +18,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const outputPath = join(__dirname, 'wrangler.toml');
 
 const env = process.env;
-const name = env.WORKER_NAME || 'cffb';
+const name = env.WORKER_NAME || 'hammybox';
 
 let toml = `name = "${name}"
 main = "index.js"
@@ -34,8 +34,8 @@ not_found_handling = "single-page-application"
 if (env.D1_DATABASE_ID) {
     toml += `
 [[d1_databases]]
-binding = "cffb_d1"
-database_name = "cffb_d1"
+binding = "hammybox_d1"
+database_name = "hammybox_d1"
 database_id = "${env.D1_DATABASE_ID}"
 `;
 }
@@ -44,7 +44,7 @@ database_id = "${env.D1_DATABASE_ID}"
 if (env.KV_NAMESPACE_ID) {
     toml += `
 [[kv_namespaces]]
-binding = "cffb_kv"
+binding = "hammybox_kv"
 id = "${env.KV_NAMESPACE_ID}"
 `;
 }
@@ -53,7 +53,7 @@ id = "${env.KV_NAMESPACE_ID}"
 if (env.R2_BUCKET_NAME) {
     toml += `
 [[r2_buckets]]
-binding = "cffb_r2"
+binding = "hammybox_r2"
 bucket_name = "${env.R2_BUCKET_NAME}"
 `;
 }

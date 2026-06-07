@@ -373,7 +373,7 @@ async function uploadSingleChunkToR2Multipart(context, chunkData, chunkIndex, to
             return { success: false, error: 'No R2 channel provided' };
         }
 
-        const R2DataBase = env.cffb_r2;
+        const R2DataBase = env.hammybox_r2;
         const multipartKey = `multipart_${uploadId}`;
 
         let finalFileId;
@@ -978,7 +978,7 @@ export async function cleanupFailedMultipartUploads(context, uploadId, uploadCha
 
         if (uploadChannel === 'cfr2') {
             // 清理R2 multipart upload
-            const R2DataBase = env.cffb_r2;
+            const R2DataBase = env.hammybox_r2;
             const multipartUpload = R2DataBase.resumeMultipartUpload(multipartInfo.key, multipartInfo.uploadId);
             await multipartUpload.abort();
 

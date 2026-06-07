@@ -123,7 +123,7 @@ export async function checkDatabaseConfig(context) {
       JSON.stringify({
         success: false,
         error: "数据库未配置 / Database not configured",
-        message: "请配置 KV 存储 (env.cffb_kv) 或 D1 数据库 (env.cffb_d1)。 / Please configure KV storage (env.cffb_kv) or D1 database (env.cffb_d1)."
+        message: "请配置 KV 存储 (env.hammybox_kv) 或 D1 数据库 (env.hammybox_d1)。 / Please configure KV storage (env.hammybox_kv) or D1 database (env.hammybox_d1)."
       }),
       {
         status: 500,

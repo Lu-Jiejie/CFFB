@@ -119,8 +119,8 @@ const r2Storage = new LocalR2Storage(join(DATA_DIR, 'r2'));
 function createEnv() {
     return {
         ...process.env,
-        cffb_d1: sqliteD1,
-        cffb_r2: r2Storage,
+        hammybox_d1: sqliteD1,
+        hammybox_r2: r2Storage,
     };
 }
 

@@ -1,10 +1,10 @@
 version: '3.8'
 
 services:
-  cffb:
-    # 暂未发布镜像。需要时改为你自己的镜像名（如 <your-dockerhub-user>/cffb:latest），
-    # 或用本地构建：docker build -t cffb . 后将下行改为 image: cffb:latest
-    image: cffb:latest
+  hammybox:
+    # 暂未发布镜像。需要时改为你自己的镜像名（如 <your-dockerhub-user>/hammybox:latest），
+    # 或用本地构建：docker build -t hammybox . 后将下行改为 image: hammybox:latest
+    image: hammybox:latest
     ports:
       - "7658:8080"
     volumes:

@@ -144,7 +144,7 @@ async function deleteFile(env, fileId, cdnUrl, url) {
 
         // 如果是R2渠道的图片，需要删除R2中对应的图片
         if (img.metadata?.Channel === 'CloudflareR2') {
-            const R2DataBase = env.cffb_r2;
+            const R2DataBase = env.hammybox_r2;
             await R2DataBase.delete(fileId);
         }
 

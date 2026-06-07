@@ -95,7 +95,7 @@ export async function getUploadConfig(db, env) {
     const cfr2 = {}
     const cfr2Channels = []
     cfr2.channels = cfr2Channels
-    if (env.cffb_r2) {
+    if (env.hammybox_r2) {
         cfr2Channels.push({
             id: 1,
             name: 'R2_env',

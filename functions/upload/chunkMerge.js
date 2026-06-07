@@ -233,7 +233,7 @@ async function mergeR2ChunksInfo(context, uploadId, completedChunks, metadata) {
     const db = getDatabase(env);
 
     try {
-        const R2DataBase = env.cffb_r2;
+        const R2DataBase = env.hammybox_r2;
         const multipartKey = `multipart_${uploadId}`;
 
         // 获取multipart info

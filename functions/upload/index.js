@@ -271,7 +271,7 @@ async function uploadFileToCloudflareR2(context, fullId, metadata, returnLink) {
     const db = getDatabase(env);
 
     // 检查R2数据库是否配置
-    if (typeof env.cffb_r2 == "undefined" || env.cffb_r2 == null || env.cffb_r2 == "") {
+    if (typeof env.hammybox_r2 == "undefined" || env.hammybox_r2 == null || env.hammybox_r2 == "") {
         return createResponse('Error: Please configure R2 database', { status: 500 });
     }
 
@@ -290,7 +290,7 @@ async function uploadFileToCloudflareR2(context, fullId, metadata, returnLink) {
         r2Channel = r2Settings.channels[0];
     }
 
-    const R2DataBase = env.cffb_r2;
+    const R2DataBase = env.hammybox_r2;
 
     // 写入R2数据库
     await R2DataBase.put(fullId, formdata.get('file'));
