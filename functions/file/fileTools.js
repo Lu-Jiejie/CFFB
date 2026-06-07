@@ -1,32 +1,8 @@
 /* ======== 文件读取工具函数 ======== */
 
-// 判断请求域名是否在允许的域名列表中
+// 判断请求域名是否在允许的域名列表中 - 功能已移除
 export function isDomainAllowed(context) {
-    const { Referer, securityConfig, url } = context;
-
-    const allowedDomains = securityConfig.access.allowedDomains;
-
-    if (Referer) {
-        try {
-            const refererUrl = new URL(Referer);
-            if (allowedDomains && allowedDomains.trim() !== '') {
-                const domains = allowedDomains.split(',');
-                domains.push(url.hostname);// 把自身域名加入白名单
-
-                let isAllowed = domains.some(domain => {
-                    let domainPattern = new RegExp(`(^|\\.)${domain.replace('.', '\\.')}$`); // Escape dot in domain
-                    return domainPattern.test(refererUrl.hostname);
-                });
-
-                if (!isAllowed) {
-                    return false;
-                }
-            }
-        } catch (e) {
-            return false;
-        }
-    }
-
+    // 域名过滤功能已移除，始终返回 true
     return true;
 }
 
@@ -124,10 +100,8 @@ export function isTgChannel(imgRecord) {
     return imgRecord.metadata?.Channel === 'Telegram' || imgRecord.metadata?.Channel === 'TelegramNew';
 }
 
-// 图片可访问性检查
+// 图片可访问性检查 - 已移除白名单/封禁功能
 export async function returnWithCheck(context, imgRecord) {
-    const { url, securityConfig } = context;
-    const whiteListMode = securityConfig.access.whiteListMode;
     const isAdminPreview = context.fileAccess?.isAdminPreview === true;
     const adminAuthorized = context.fileAccess?.adminAuthResult?.authorized === true;
     const response = new Response('success', { status: 200 });
@@ -149,18 +123,7 @@ export async function returnWithCheck(context, imgRecord) {
 
     context.fileAccess.cacheControl = FILE_CACHE_CONTROL.PUBLIC;
 
-    if (record.metadata.ListType == "White") {
-        return response;
-    } else if (record.metadata.ListType == "Block") {
-        return await returnBlockImg(url);
-    } else if (record.metadata.Label == "adult") {
-        return await returnBlockImg(url);
-    }
-
-    if (whiteListMode) {
-        return await returnWhiteListImg(url);
-    }
-
+    // 白名单/封禁功能已移除，所有文件均可访问
     return response;
 }
 

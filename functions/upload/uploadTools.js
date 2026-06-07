@@ -365,24 +365,10 @@ export function getUploadIp(request) {
     return ips[0]; // 返回第一个IP地址
 }
 
-// 检查上传IP是否被封禁
+// 检查上传IP是否被封禁 - 功能已移除
 export async function isBlockedUploadIp(env, uploadIp) {
-    try {
-        const db = getDatabase(env);
-
-        let list = await db.get("manage@blockipList");
-        if (list == null) {
-            list = [];
-        } else {
-            list = list.split(",");
-        }
-
-        return list.includes(uploadIp);
-    } catch (error) {
-        console.error('Failed to check blocked IP:', error);
-        // 如果数据库未配置，默认不阻止任何IP
-        return false;
-    }
+    // IP 封禁功能已移除，始终返回 false
+    return false;
 }
 
 // 构建唯一文件ID

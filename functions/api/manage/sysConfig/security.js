@@ -101,7 +101,7 @@ export async function getSecurityConfig(db, env) {
     const kvAuth = settingsKV.auth || {}
     const auth = {
         // 未配置任何密码时，回退到默认密码 hammybox（用户应在登录后尽快修改）
-        password: kvAuth.password ?? env.BASIC_PASS ?? 'hammybox',
+        password: kvAuth.password ?? env.PASSWORD ?? '',
     }
     settings.auth = auth
 
@@ -117,11 +117,9 @@ export async function getSecurityConfig(db, env) {
     }
     settings.upload = upload
 
-    // 访问管理
+    // 访问管理 - 已移除域名过滤和白名单功能
     const kvAccess = settingsKV.access || {}
     const access = {
-        allowedDomains: kvAccess.allowedDomains || env.ALLOWED_DOMAINS || '',
-        whiteListMode: kvAccess.whiteListMode ?? env.WhiteList_Mode === 'true',
         // 会话安全策略字段（单用户单角色：统一一个会话有效期）
         sessionSecure: kvAccess.sessionSecure ?? false,
         sessionMaxAge: kvAccess.sessionMaxAge ?? 14,
