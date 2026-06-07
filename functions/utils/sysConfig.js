@@ -98,13 +98,12 @@ export async function fetchSecurityConfig(env) {
         // 返回默认配置
         return {
             auth: {
-                user: { authCode: "" },
                 admin: { adminUsername: "", adminPassword: "" }
             },
             upload: {
                 moderate: { enabled: false, channel: "default", moderateContentApiKey: "", nsfwApiPath: "" }
             },
-            access: { allowedDomains: "", whiteListMode: false, sessionSecure: false, userSessionMaxAge: 14, adminSessionMaxAge: 14 }
+            access: { allowedDomains: "", whiteListMode: false, sessionSecure: false, sessionMaxAge: 14 }
         };
     }
 }

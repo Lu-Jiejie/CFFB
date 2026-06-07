@@ -116,7 +116,7 @@ export async function onRequest(context) {
 
         // 如果是 R2 渠道的图片，需要移动 R2 中对应的图片
         if (metadata?.Channel === 'CloudflareR2') {
-            const R2DataBase = env.img_r2;
+            const R2DataBase = env.cffb_r2;
 
             // 获取原文件内容
             const object = await R2DataBase.get(fileId);

@@ -1,4 +1,4 @@
-import { dualAuthCheck } from '../utils/auth/dualAuth.js';
+import { authenticate } from '../utils/auth/authCore.js';
 
 export async function onRequest(context) {
     // 获取请求体中URL的内容
@@ -11,9 +11,8 @@ export async function onRequest(context) {
         data
     } = context;
 
-    // 双重鉴权检查
-    const url = new URL(request.url);
-    const { authorized } = await dualAuthCheck(env, url, request);
+    // 鉴权：登录即放行
+    const { authorized } = await authenticate({ env, request, requiredPermission: null });
     if (!authorized) {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), {
             status: 401,

@@ -1,12 +1,12 @@
 {
-  "name": "cloudflare-imgbed",
+  "name": "cffb",
   "version": "2.7.3",
   "type": "module",
   "scripts": {
     "ci-test": "concurrently --kill-others \"npm start\" \"wait-on http://localhost:8080 && mocha\"",
     "ci-test:docker": "concurrently --kill-others \"npm run start:docker\" \"wait-on http://localhost:8080 && mocha\"",
     "test": "mocha",
-    "start": "npx wrangler pages dev ./frontend-dist --kv \"img_url\" --r2 \"img_r2\" --ip 0.0.0.0 --port 8080 --persist-to ./data",
+    "start": "npx wrangler pages dev ./frontend-dist --kv \"cffb_kv\" --r2 \"cffb_r2\" --ip 0.0.0.0 --port 8080 --persist-to ./data",
     "start:docker": "node --import ./deploy/server/register.mjs deploy/server/index.js",
     "deploy:worker": "node deploy/worker/generate-routes.js && npx wrangler deploy --config deploy/worker/wrangler.toml"
   },

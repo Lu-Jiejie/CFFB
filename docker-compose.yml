@@ -1,8 +1,10 @@
 version: '3.8'
 
 services:
-  imgbed:
-    image: marseventh/cloudflare-imgbed:latest
+  cffb:
+    # 暂未发布镜像。需要时改为你自己的镜像名（如 <your-dockerhub-user>/cffb:latest），
+    # 或用本地构建：docker build -t cffb . 后将下行改为 image: cffb:latest
+    image: cffb:latest
     ports:
       - "7658:8080"
     volumes:

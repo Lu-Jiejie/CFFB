@@ -1,5 +1,5 @@
 import { getDatabase } from "../../utils/databaseAdapter.js";
-import { destroySessionsByAuthType } from "../../utils/auth/sessionManager.js";
+import { destroyAllSessions } from "../../utils/auth/sessionManager.js";
 
 /**
  * 认证重置接口
@@ -48,13 +48,12 @@ export async function onRequestGet(context) {
         }
 
         // 清除所有会话
-        const adminDestroyed = await destroySessionsByAuthType(env, 'admin');
-        const userDestroyed = await destroySessionsByAuthType(env, 'user');
+        const sessionsCleared = await destroyAllSessions(env);
 
         return new Response(JSON.stringify({
             success: true,
             message: 'Auth credentials reset. Other security settings preserved. All sessions cleared.',
-            sessionsCleared: { admin: adminDestroyed, user: userDestroyed }
+            sessionsCleared
         }), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },

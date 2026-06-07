@@ -9,7 +9,7 @@ on:
       worker_name:
         description: 'Worker Name'
         required: false
-        default: 'cloudflare-imgbed'
+        default: 'cffb'
 
 # 所有配置均通过 Secrets 传入（public 仓库的 Variables 对所有人可见，不安全）
 #
@@ -25,16 +25,14 @@ on:
 #
 # 可选：
 #   R2_BUCKET_NAME        - R2 存储桶名称
-#   WORKER_NAME           - Worker 名称（默认 cloudflare-imgbed，手动触发时可在界面覆盖）
+#   WORKER_NAME           - Worker 名称（默认 cffb，手动触发时可在界面覆盖）
 #   WORKER_VARS           - JSON 格式的业务环境变量（非必要不建议配置，
 #                           部署完成后请在管理面板中配置所有设置）
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # 仅在 fork 仓库且配置了 Cloudflare secrets 时运行
-    # 原仓库 push 和未配置 secrets 的 fork 不会触发部署
-    if: ${{ github.event.repository.fork }}
+    # 配置了 Cloudflare secrets 时运行（未配置 secrets 的仓库自动跳过）
     steps:
       - name: Check deployment config
         id: check

@@ -9,7 +9,7 @@ import {
     returnWithCheck, return404, returnBlockImg, isDomainAllowed, FILE_CACHE_CONTROL
 } from './fileTools';
 import { getDatabase } from '../utils/databaseAdapter.js';
-import { authenticate, AUTH_SCOPE } from '../utils/auth/authCore.js';
+import { authenticate } from '../utils/auth/authCore.js';
 import {
     resolveDiscordCredentials,
     resolveHuggingFaceCredentials,
@@ -181,7 +181,7 @@ async function buildFileAccessContext(context) {
     const fromAdmin = url.searchParams.get('from') === 'admin';
     const fileAccess = {
         isAdminPreview: fromAdmin,
-        adminAuthResult: { authorized: false, authType: null },
+        adminAuthResult: { authorized: false },
         cacheControl: undefined,
     };
 
@@ -190,7 +190,6 @@ async function buildFileAccessContext(context) {
             env,
             request,
             requiredPermission: 'manage',
-            authScope: AUTH_SCOPE.ADMIN,
         });
     }
 
@@ -612,11 +611,11 @@ async function handleR2File(context, fileId, encodedFileName, fileType) {
 
     try {
         // 检查是否配置了R2
-        if (typeof env.img_r2 == "undefined" || env.img_r2 == null || env.img_r2 == "") {
+        if (typeof env.cffb_r2 == "undefined" || env.cffb_r2 == null || env.cffb_r2 == "") {
             return new Response('Error: Please configure R2 database', { status: 500 });
         }
 
-        const R2DataBase = env.img_r2;
+        const R2DataBase = env.cffb_r2;
 
         // 检查Range请求头
         const range = request.headers.get('Range');

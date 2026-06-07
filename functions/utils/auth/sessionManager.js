@@ -1,7 +1,6 @@
 /**
- * 会话管理工具
- * 使用数据库存储会话，通过 HttpOnly Cookie 传递会话 Token
- * 管理端和用户端使用独立的 Cookie（admin_session / user_session）
+ * 会话管理工具（单用户单角色版）
+ * 使用数据库存储会话，通过单一 HttpOnly Cookie 传递会话 Token
  */
 
 import { generateSessionToken } from './passwordHash.js';
@@ -10,33 +9,26 @@ import { fetchSecurityConfig } from '../sysConfig.js';
 
 const SESSION_PREFIX = 'manage@session@';
 
-// Cookie 名称映射
-const COOKIE_NAMES = {
-    admin: 'admin_session',
-    user: 'user_session',
-};
+// 会话 Cookie 名称
+const COOKIE_NAME = 'cffb_session';
 
 /**
  * 创建新会话
  * @param {Object} env - 环境变量
- * @param {string} authType - 认证类型 ('admin' | 'user')
- * @param {string} [username] - 用户名（管理员登录时使用）
+ * @param {string} [username] - 用户名
  * @returns {Promise<{token: string, cookie: string}>}
  */
-export async function createSession(env, authType, username = '') {
+export async function createSession(env, username = '') {
     // 读取安全策略配置
     const securityConfig = await fetchSecurityConfig(env);
     const accessConfig = securityConfig.access || {};
     const secure = accessConfig.sessionSecure ?? false;
-    const maxAgeDays = authType === 'admin'
-        ? (accessConfig.adminSessionMaxAge ?? 14)
-        : (accessConfig.userSessionMaxAge ?? 14);
+    const maxAgeDays = accessConfig.sessionMaxAge ?? 14;
     const maxAge = maxAgeDays * 86400;
 
     const db = getDatabase(env);
     const token = generateSessionToken();
     const sessionData = {
-        authType,
         username,
         createdAt: Date.now(),
         expiresAt: Date.now() + maxAge * 1000,
@@ -46,21 +38,18 @@ export async function createSession(env, authType, username = '') {
         expirationTtl: maxAge,
     });
 
-    const cookieName = COOKIE_NAMES[authType] || 'session';
-    const cookie = buildSessionCookie(cookieName, token, maxAge, secure);
+    const cookie = buildSessionCookie(COOKIE_NAME, token, maxAge, secure);
     return { token, cookie };
 }
 
 /**
- * 验证会话（按 authType 读取对应的 Cookie）
+ * 验证会话（读取 cffb_session Cookie）
  * @param {Object} env - 环境变量
  * @param {Request} request - 请求对象
- * @param {string} authType - 要验证的认证类型 ('admin' | 'user')
  * @returns {Promise<{valid: boolean, session?: Object}>}
  */
-export async function validateSession(env, request, authType) {
-    const cookieName = COOKIE_NAMES[authType] || 'session';
-    const token = getCookieValue(request, cookieName);
+export async function validateSession(env, request) {
+    const token = getSessionToken(request);
     if (!token) {
         return { valid: false };
     }
@@ -73,10 +62,6 @@ export async function validateSession(env, request, authType) {
 
     try {
         const session = JSON.parse(sessionStr);
-        // 验证 authType 匹配
-        if (session.authType !== authType) {
-            return { valid: false };
-        }
         if (Date.now() > session.expiresAt) {
             await db.delete(`${SESSION_PREFIX}${token}`);
             return { valid: false };
@@ -88,65 +73,30 @@ export async function validateSession(env, request, authType) {
 }
 
 /**
- * 验证任意有效会话（不限 authType，用于 sessionCheck 接口）
+ * 销毁当前会话并清除 Cookie
  * @param {Object} env - 环境变量
  * @param {Request} request - 请求对象
- * @returns {Promise<{valid: boolean, session?: Object}>}
+ * @returns {Promise<string[]>} 清除 Cookie 的 Set-Cookie 头数组
  */
-export async function validateAnySession(env, request) {
-    // 优先检查 admin，再检查 user
-    const adminResult = await validateSession(env, request, 'admin');
-    if (adminResult.valid) return adminResult;
-
-    const userResult = await validateSession(env, request, 'user');
-    if (userResult.valid) return userResult;
-
-    return { valid: false };
-}
-
-/**
- * 销毁会话
- * @param {Object} env - 环境变量
- * @param {Request} request - 请求对象
- * @param {string} [authType] - 要销毁的认证类型，不传则销毁所有
- * @returns {Promise<string|string[]>} 清除 Cookie 的 Set-Cookie 头
- */
-export async function destroySession(env, request, authType) {
-    // 读取安全策略配置
+export async function destroySession(env, request) {
     const securityConfig = await fetchSecurityConfig(env);
     const secure = securityConfig.access?.sessionSecure ?? false;
 
     const db = getDatabase(env);
 
-    if (authType) {
-        // 销毁指定类型的会话
-        const cookieName = COOKIE_NAMES[authType] || 'session';
-        const token = getCookieValue(request, cookieName);
-        if (token) {
-            await db.delete(`${SESSION_PREFIX}${token}`);
-        }
-        return buildSessionCookie(cookieName, '', 0, secure);
-    } else {
-        // 销毁所有类型的会话
-        const cookies = [];
-        for (const [type, cookieName] of Object.entries(COOKIE_NAMES)) {
-            const token = getCookieValue(request, cookieName);
-            if (token) {
-                await db.delete(`${SESSION_PREFIX}${token}`);
-            }
-            cookies.push(buildSessionCookie(cookieName, '', 0, secure));
-        }
-        return cookies;
+    const token = getCookieValue(request, COOKIE_NAME);
+    if (token) {
+        await db.delete(`${SESSION_PREFIX}${token}`);
     }
+    return [buildSessionCookie(COOKIE_NAME, '', 0, secure)];
 }
 
 /**
- * 按认证类型批量清除会话
+ * 清除所有会话（用于重置认证 / 修改凭据后强制重新登录）
  * @param {Object} env - 环境变量
- * @param {string} authType - 要清除的认证类型 ('admin' | 'user')
  * @returns {Promise<number>} 清除的会话数量
  */
-export async function destroySessionsByAuthType(env, authType) {
+export async function destroyAllSessions(env) {
     const db = getDatabase(env);
     let destroyed = 0;
 
@@ -163,19 +113,8 @@ export async function destroySessionsByAuthType(env, authType) {
         const keys = result.keys || [];
 
         for (const key of keys) {
-            try {
-                const sessionStr = await db.get(key.name);
-                if (sessionStr) {
-                    const session = JSON.parse(sessionStr);
-                    if (session.authType === authType) {
-                        await db.delete(key.name);
-                        destroyed++;
-                    }
-                }
-            } catch {
-                await db.delete(key.name);
-                destroyed++;
-            }
+            await db.delete(key.name);
+            destroyed++;
         }
 
         cursor = result.cursor;
@@ -183,6 +122,15 @@ export async function destroySessionsByAuthType(env, authType) {
     }
 
     return destroyed;
+}
+
+/**
+ * 从请求中提取会话 Token
+ * @param {Request} request - 请求对象
+ * @returns {string|null}
+ */
+function getSessionToken(request) {
+    return getCookieValue(request, COOKIE_NAME);
 }
 
 /**

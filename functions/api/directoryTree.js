@@ -1,6 +1,5 @@
 import { getDirectoryTree } from '../utils/indexManager';
-import { dualAuthCheck } from '../utils/auth/dualAuth';
-import { fetchPageConfig } from '../utils/sysConfig';
+import { authenticate } from '../utils/auth/authCore.js';
 
 /**
  * 目录树 API 端点
@@ -12,36 +11,20 @@ import { fetchPageConfig } from '../utils/sysConfig';
  * 响应：
  * - 成功：{ tree: DirectoryTreeNode }
  * - 失败：{ error: string }
- * 
+ *
  * 权限说明：
- * - 管理端鉴权成功：始终允许访问
- * - 用户端鉴权成功：仅当 showDirectorySuggestions 开启时允许访问
+ * - 登录后即可访问（单用户单角色，登录即全权限）
  */
 export async function onRequestGet(context) {
     const { env, request } = context;
     const url = new URL(request.url);
-    
-    // 双重鉴权：用户端或管理端任意一个通过即可
-    const authResult = await dualAuthCheck(env, url, request);
+
+    // 鉴权：登录即放行
+    const authResult = await authenticate({ env, request, requiredPermission: null });
     if (!authResult.authorized) {
         return new Response('Unauthorized', { status: 401 });
     }
-    
-    // 非管理员身份（用户端或未配置认证的匿名访问），检查 showDirectorySuggestions 设置
-    if (authResult.authType !== 'admin') {
-        const pageConfig = await fetchPageConfig(env);
-        // 从 config 数组中查找 showDirectorySuggestions 设置
-        const showDirSetting = pageConfig.config?.find(c => c.id === 'showDirectorySuggestions');
-        const showDirectorySuggestions = showDirSetting?.value ?? showDirSetting?.default ?? true;
-        
-        if (!showDirectorySuggestions) {
-            return new Response(JSON.stringify({ error: 'Directory suggestions disabled' }), {
-                status: 403,
-                headers: { 'Content-Type': 'application/json' }
-            });
-        }
-    }
-    
+
     try {
         const tree = await getDirectoryTree(context);
         const cacheTime = url.searchParams.get('cacheTime') || 60;

@@ -1,4 +1,4 @@
-import { authenticate, AUTH_SCOPE } from "../../utils/auth/authCore.js";
+import { authenticate } from "../../utils/auth/authCore.js";
 
 const DEFAULT_MANAGE_CACHE_CONTROL = 'private, no-store, max-age=0';
 
@@ -86,7 +86,6 @@ async function authentication(context) {
     env: context.env,
     request: context.request,
     requiredPermission,
-    authScope: AUTH_SCOPE.ADMIN,
   });
 
   if (!result.authorized) {

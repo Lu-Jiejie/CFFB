@@ -33,7 +33,6 @@ import * as apiManageSysConfigSecurity from '../../functions/api/manage/sysConfi
 import * as apiManageSysConfigUpload from '../../functions/api/manage/sysConfig/upload.js';
 import * as apiManageTagsAutocomplete from '../../functions/api/manage/tags/autocomplete.js';
 import * as apiManageTagsBatch from '../../functions/api/manage/tags/batch.js';
-import * as apiAuthAdminLogin from '../../functions/api/auth/adminLogin.js';
 import * as apiAuthLogin from '../../functions/api/auth/login.js';
 import * as apiAuthLogout from '../../functions/api/auth/logout.js';
 import * as apiAuthResetAuth from '../../functions/api/auth/resetAuth.js';
@@ -83,7 +82,6 @@ const routes = [
     { path: '/api/manage/sysConfig/upload', module: apiManageSysConfigUpload, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/tags/autocomplete', module: apiManageTagsAutocomplete, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/tags/batch', module: apiManageTagsBatch, middlewares: [mw_api, mw_api_manage] },
-    { path: '/api/auth/adminLogin', module: apiAuthAdminLogin, middlewares: [mw_api] },
     { path: '/api/auth/login', module: apiAuthLogin, middlewares: [mw_api] },
     { path: '/api/auth/logout', module: apiAuthLogout, middlewares: [mw_api] },
     { path: '/api/auth/resetAuth', module: apiAuthResetAuth, middlewares: [mw_api] },
