@@ -135,7 +135,7 @@ export async function onRequestPost(context) {
         waitUntil(endUpload(uploadContext, fullId, metadata));
 
         // 返回成功响应
-        const returnLink = `/file/${fullId}`;
+        const returnLink = `/api/file/${fullId}`;
         return createResponse(JSON.stringify({
             success: true,
             src: returnLink,

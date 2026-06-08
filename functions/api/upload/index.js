@@ -191,13 +191,13 @@ async function processFileUpload(context, formdata = null) {
     // 构建文件ID
     const fullId = await buildUniqueFileId(context, fileName, fileType);
 
-    // 获得返回链接格式, default为返回/file/id, full为返回完整链接
+    // 获得返回链接格式, default为返回/api/file/id, full为返回完整链接
     const returnFormat = url.searchParams.get('returnFormat') || 'default';
     let returnLink = '';
     if (returnFormat === 'full') {
-        returnLink = `${url.origin}/file/${fullId}`;
+        returnLink = `${url.origin}/api/file/${fullId}`;
     } else {
-        returnLink = `/file/${fullId}`;
+        returnLink = `/api/file/${fullId}`;
     }
 
     /* ====================================不同渠道上传======================================= */

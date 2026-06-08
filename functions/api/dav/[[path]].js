@@ -118,7 +118,7 @@ async function handleGet(request, env) {
         }
     } else { // File download
         try {
-            const fileUrl = new URL(`/file${path}`, request.url);
+            const fileUrl = new URL(`/api/file${path}`, request.url);
 
             const fileResponse = await fetch(fileUrl.toString());
 
