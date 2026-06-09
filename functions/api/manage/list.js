@@ -4,6 +4,7 @@ import {
 } from '../../utils/indexManager.js';
 import { getDatabase } from '../../utils/databaseAdapter.js';
 import { createMetadataViewContext, serializeFileRecordForManagement } from '../../utils/metadata/metadataView.js';
+import { normalizeFolderPath } from '../../utils/pathNormalizer.js';
 
 // CORS 跨域响应头
 const corsHeaders = {
@@ -22,7 +23,8 @@ export async function onRequest(context) {
     let count = parseInt(url.searchParams.get('count'), 10) || 50;
     let sum = url.searchParams.get('sum') === 'true';
     let recursive = url.searchParams.get('recursive') === 'true';
-    let dir = url.searchParams.get('dir') || '';
+    let folder = url.searchParams.get('folder');
+    folder = folder === null || folder === undefined ? '' : normalizeFolderPath(folder);
     let search = url.searchParams.get('search') || '';
     let channel = url.searchParams.get('channel') || '';
     let listType = url.searchParams.get('listType') || '';
@@ -52,15 +54,15 @@ export async function onRequest(context) {
     const channelNameArray = channelName ? channelName.split(',').map(t => t.trim()).filter(t => t) : [];
 
     // 处理目录参数
-    if (dir) {
+    if (folder) {
         // 路径安全处理：防止路径穿越
-        dir = dir.replace(/\.\./g, '_').replace(/\\/g, '/').replace(/\/{2,}/g, '/');
+        folder = folder.replace(/\.\./g, '_').replace(/\\/g, '/').replace(/\/{2,}/g, '/');
     }
-    if (dir.startsWith('/')) {
-        dir = dir.substring(1);
+    if (folder.startsWith('/')) {
+        folder = folder.substring(1);
     }
-    if (dir && !dir.endsWith('/')) {
-        dir += '/';
+    if (folder && !folder.endsWith('/')) {
+        folder += '/';
     }
 
     try {
@@ -128,7 +130,7 @@ export async function onRequest(context) {
         if (count === -1 && sum) {
             const result = await readIndex(context, {
                 search,
-                directory: dir,
+                folder: folder,
                 channel: channelArray,
                 listType: listTypeArray,
                 accessStatus: accessStatusArray,
@@ -151,7 +153,7 @@ export async function onRequest(context) {
         // 普通查询：返回数据
         const result = await readIndex(context, {
             search,
-            directory: dir,
+            folder: folder,
             start,
             count,
             channel: channelArray,
@@ -167,11 +169,11 @@ export async function onRequest(context) {
 
         // 索引读取失败，直接从 KV 中获取所有文件记录
         if (!result.success) {
-            const dbRecords = await getAllFileRecords(context.env, dir);
+            const dbRecords = await getAllFileRecords(context.env, folder);
 
             return new Response(JSON.stringify({
                 files: dbRecords.files,
-                directories: dbRecords.directories,
+                folders: dbRecords.folders,
                 totalCount: dbRecords.totalCount,
                 directFileCount: dbRecords.directFileCount,
                 directFolderCount: dbRecords.directFolderCount,
@@ -193,7 +195,7 @@ export async function onRequest(context) {
 
         return new Response(JSON.stringify({
             files: compatibleFiles,
-            directories: result.directories,
+            folders: result.folders,
             totalCount: result.totalCount,
             directFileCount: result.directFileCount,
             directFolderCount: result.directFolderCount,
@@ -216,7 +218,7 @@ export async function onRequest(context) {
     }
 }
 
-async function getAllFileRecords(env, dir) {
+async function getAllFileRecords(env, folder) {
     const allRecords = [];
     let cursor = null;
 
@@ -226,7 +228,7 @@ async function getAllFileRecords(env, dir) {
 
         while (true) {
             const response = await db.list({
-                prefix: dir,
+                prefix: folder,
                 limit: 1000,
                 cursor: cursor
             });
@@ -259,14 +261,14 @@ async function getAllFileRecords(env, dir) {
             await new Promise(resolve => setTimeout(resolve, 10));
         }
 
-        // 提取目录信息
-        const directories = new Set();
+        // 提取文件夹信息
+        const folders = new Set();
         const filteredRecords = [];
         allRecords.forEach(item => {
-            const subDir = item.name.substring(dir.length);
+            const subDir = item.name.substring(folder.length);
             const firstSlashIndex = subDir.indexOf('/');
             if (firstSlashIndex !== -1) {
-                directories.add(dir + subDir.substring(0, firstSlashIndex));
+                folders.add(folder + subDir.substring(0, firstSlashIndex));
             } else {
                 filteredRecords.push(item);
             }
@@ -274,10 +276,10 @@ async function getAllFileRecords(env, dir) {
 
         return {
             files: filteredRecords,
-            directories: Array.from(directories),
+            folders: Array.from(folders),
             totalCount: allRecords.length,
             directFileCount: filteredRecords.length,
-            directFolderCount: directories.size,
+            directFolderCount: folders.size,
             returnedCount: filteredRecords.length
         };
 
@@ -285,7 +287,7 @@ async function getAllFileRecords(env, dir) {
         console.error('Error in getAllFileRecords:', error);
         return {
             files: [],
-            directories: [],
+            folders: [],
             totalCount: 0,
             directFileCount: 0,
             directFolderCount: 0,

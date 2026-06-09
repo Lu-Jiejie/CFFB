@@ -25,11 +25,11 @@ D1Database.prototype.putFile = function(fileId, value, options) {
         'INSERT OR REPLACE INTO files (' +
         'id, value, metadata, file_name, file_type, file_size, ' +
         'upload_ip, upload_address, list_type, timestamp, ' +
-        'label, directory, channel, channel_name, ' +
+        'label, folder, channel, channel_name, ' +
         'tg_file_id, tg_chat_id, tg_bot_token, is_chunked' +
         ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
-    
+
     return stmt.bind(
         fileId,
         value,
@@ -42,7 +42,7 @@ D1Database.prototype.putFile = function(fileId, value, options) {
         extractedFields.listType,
         extractedFields.timestamp,
         extractedFields.label,
-        extractedFields.directory,
+        extractedFields.folder,
         extractedFields.channel,
         extractedFields.channelName,
         extractedFields.tgFileId,
@@ -300,7 +300,7 @@ D1Database.prototype.extractMetadataFields = function(metadata) {
         listType: metadata.ListType || null,
         timestamp: metadata.TimeStamp || null,
         label: metadata.Label || null,
-        directory: metadata.Directory || null,
+        folder: metadata.Folder || null,
         channel: metadata.Channel || null,
         channelName: metadata.ChannelName || null,
         tgFileId: metadata.TgFileId || null,

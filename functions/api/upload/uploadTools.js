@@ -1,7 +1,8 @@
-import { fetchSecurityConfig } from "../utils/sysConfig";
-import { purgeCFCache, purgeRandomFileListCache, purgePublicFileListCache } from "../utils/purgeCache";
-import { addFileToIndex } from "../utils/indexManager.js";
-import { getDatabase } from '../utils/databaseAdapter.js';
+import { fetchSecurityConfig } from "../../utils/sysConfig";
+import { purgeCFCache, purgeRandomFileListCache, purgePublicFileListCache } from "../../utils/purgeCache";
+import { addFileToIndex } from "../../utils/indexManager.js";
+import { getDatabase } from '../../utils/databaseAdapter.js';
+import { normalizeFolderPath } from '../../utils/pathNormalizer.js';
 
 // 统一的响应创建函数
 export function createResponse(body, options = {}) {
@@ -108,26 +109,6 @@ export function sanitizeUploadFolder(folder) {
         }
     }
 
-    // 移除路径穿越字符 ..
-    // 将 .. 替换为 _（无论是否在路径段中）
-    folder = folder.replace(/\.\./g, '_');
-
-    // 将单独的 . 路径段替换为 _（例如 /./）
-    // 处理方式：按 / 分割后，将纯 . 的段替换为 _
-    folder = folder.split('/').map(seg => seg === '.' ? '_' : seg).join('/');
-
-    // 替换反斜杠为正斜杠
-    folder = folder.replace(/\\/g, '/');
-
-    // 将连续斜杠替换为单个斜杠
-    folder = folder.replace(/\/{2,}/g, '/');
-
-    // 移除开头的 /
-    folder = folder.replace(/^\/+/, '');
-
-    // 移除末尾的 /
-    folder = folder.replace(/\/+$/, '');
-
     // 对每个路径段进行特殊字符处理
     const segments = folder.split('/');
     const sanitizedSegments = segments
@@ -138,7 +119,8 @@ export function sanitizeUploadFolder(folder) {
         })
         .filter(seg => seg.length > 0); // 过滤空段
 
-    return sanitizedSegments.join('/');
+    // 使用统一的规范化函数处理路径
+    return normalizeFolderPath(sanitizedSegments.join('/')).replace(/\/$/, ''); // 去除末尾斜杠
 }
 
 // 检查文件扩展名是否有效

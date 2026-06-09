@@ -10,9 +10,9 @@
  * 这样可以绕过 CF Workers 的 100MB 请求体限制和 CPU 时间限制
  */
 
-import { HuggingFaceAPI } from '../../utils/storage/huggingfaceAPI.js';
-import { fetchUploadConfig } from '../../utils/sysConfig.js';
-import { userAuthCheck, UnauthorizedResponse } from '../../utils/auth/userAuth.js';
+import { HuggingFaceAPI } from '../../../utils/storage/huggingfaceAPI.js';
+import { fetchUploadConfig } from '../../../utils/sysConfig.js';
+import { userAuthCheck, UnauthorizedResponse } from '../../../utils/auth/userAuth.js';
 import { buildUniqueFileId, getUploadIp, isBlockedUploadIp, createResponse } from '../uploadTools.js';
 
 export async function onRequestPost(context) {

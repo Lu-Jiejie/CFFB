@@ -472,7 +472,7 @@ export async function mergeOperationsToIndex(context, options = {}) {
  * @param {Object} context - 上下文对象
  * @param {Object} options - 查询选项
  * @param {string} options.search - 搜索关键字
- * @param {string} options.directory - 目录过滤
+ * @param {string} options.folder - 目录过滤
  * @param {number} options.start - 起始位置
  * @param {number} options.count - 返回数量，-1 表示返回所有
  * @param {Array<string>|string} options.channel - 渠道过滤（支持数组多选）
@@ -490,7 +490,7 @@ export async function readIndex(context, options = {}) {
     try {
         const {
             search = '',
-            directory = '',
+            folder = '',
             start = 0,
             count = 50,
             channel = [],
@@ -514,7 +514,7 @@ export async function readIndex(context, options = {}) {
         const channelNameArr = Array.isArray(channelName) ? channelName : (channelName ? [channelName] : []);
 
         // 处理目录满足无头有尾的格式，根目录为空
-        const dirPrefix = directory === '' || directory.endsWith('/') ? directory : directory + '/';
+        const dirPrefix = folder === '' || folder.endsWith('/') ? folder : folder + '/';
 
         // 处理挂起的操作
         const mergeResult = await mergeOperationsToIndex(context);
@@ -531,11 +531,11 @@ export async function readIndex(context, options = {}) {
         let filteredFiles = index.files;
 
         // 目录过滤
-        if (directory) {
-            const normalizedDir = directory.endsWith('/') ? directory : directory + '/';
+        if (folder) {
+            const normalizedDir = folder.endsWith('/') ? folder : folder + '/';
             filteredFiles = filteredFiles.filter(file => {
-                const fileDir = file.metadata.Directory ? file.metadata.Directory : extractDirectory(file.id);
-                return fileDir.startsWith(normalizedDir) || file.metadata.Directory === directory;
+                const fileDir = file.metadata.Folder ? file.metadata.Folder : extractDirectory(file.id);
+                return fileDir.startsWith(normalizedDir) || file.metadata.Folder === folder;
             });
         }
 
@@ -703,7 +703,7 @@ export async function readIndex(context, options = {}) {
 
         // 计算当前目录下的直接文件（不包含子目录文件）
         const directFiles = filteredFiles.filter(file => {
-            const fileDir = file.metadata.Directory ? file.metadata.Directory : extractDirectory(file.id);
+            const fileDir = file.metadata.Folder ? file.metadata.Folder : extractDirectory(file.id);
             return fileDir === dirPrefix;
         });
         const directFileCount = directFiles.length;
@@ -719,26 +719,26 @@ export async function readIndex(context, options = {}) {
             resultFiles = resultFiles.slice(startIndex, endIndex);
         }
 
-        // 提取目录信息
-        const directories = new Set();
+        // 提取文件夹信息
+        const folders = new Set();
         filteredFiles.forEach(file => {
-            const fileDir = file.metadata.Directory ? file.metadata.Directory : extractDirectory(file.id);
+            const fileDir = file.metadata.Folder ? file.metadata.Folder : extractDirectory(file.id);
             if (fileDir && fileDir.startsWith(dirPrefix)) {
                 const relativePath = fileDir.substring(dirPrefix.length);
                 const firstSlashIndex = relativePath.indexOf('/');
                 if (firstSlashIndex !== -1) {
                     const subDir = dirPrefix + relativePath.substring(0, firstSlashIndex);
-                    directories.add(subDir);
+                    folders.add(subDir);
                 }
             }
         });
 
         // 直接子文件夹数目
-        const directFolderCount = directories.size;
+        const directFolderCount = folders.size;
 
         return {
             files: resultFiles,
-            directories: Array.from(directories),
+            folders: Array.from(folders),
             totalCount: totalCount,
             directFileCount: directFileCount,
             directFolderCount: directFolderCount,
@@ -751,7 +751,7 @@ export async function readIndex(context, options = {}) {
         console.error('Error reading index:', error);
         return {
             files: [],
-            directories: [],
+            folders: [],
             totalCount: 0,
             indexLastUpdated: Date.now(),
             returnedCount: 0,
@@ -878,10 +878,10 @@ export async function getIndexInfo(context, options = {}) {
 
         // 统计各渠道文件数量
         const channelStats = Object.create(null);
-        const directoryStats = Object.create(null);
+        const folderStats = Object.create(null);
         const typeStats = Object.create(null);
         const uploadTrend = createUploadTrendAccumulator(index.files, options);
-        
+
         index.files.forEach(file => {
             const metadata = file.metadata || {};
 
@@ -889,10 +889,10 @@ export async function getIndexInfo(context, options = {}) {
             const channel = normalizeChannel(metadata.Channel);
             incrementStat(channelStats, channel);
 
-            // 目录统计
-            const dir = metadata.Directory || extractDirectory(file.id) || '/';
-            incrementStat(directoryStats, dir);
-            
+            // 文件夹统计
+            const dir = metadata.Folder || extractDirectory(file.id) || '/';
+            incrementStat(folderStats, dir);
+
             // 类型统计
             let listType = metadata.ListType || 'None';
             const label = metadata.Label || 'None';
@@ -909,7 +909,7 @@ export async function getIndexInfo(context, options = {}) {
             totalFiles: index.totalCount,
             lastUpdated: index.lastUpdated,
             channelStats,
-            directoryStats,
+            folderStats,
             typeStats,
             uploadTrend: finalizeUploadTrend(uploadTrend),
             oldestFile: index.files[index.files.length - 1],
@@ -1709,10 +1709,10 @@ function extractDirectory(filePath) {
 }
 
 /**
- * 将扁平目录路径列表转换为嵌套树结构
- * @param {Array<string>} directories - 目录路径数组，如 ['photos/', 'photos/2024/', 'documents/']
+ * 将扁平文件夹路径列表转换为嵌套树结构
+ * @param {Array<string>} folderPaths - 文件夹路径数组，如 ['photos/', 'photos/2024/', 'documents/']
  * @returns {Object} 树形结构 { name, path, children }
- * 
+ *
  * 示例输出：
  * {
  *   name: "/",
@@ -1729,7 +1729,7 @@ function extractDirectory(filePath) {
  *   ]
  * }
  */
-function buildTree(directories) {
+function buildTree(folderPaths) {
     // 创建根节点
     const root = {
         name: "/",
@@ -1737,8 +1737,8 @@ function buildTree(directories) {
         children: []
     };
 
-    // 如果没有目录，返回仅包含根节点的空树
-    if (!directories || directories.length === 0) {
+    // 如果没有文件夹，返回仅包含根节点的空树
+    if (!folderPaths || folderPaths.length === 0) {
         return root;
     }
 
@@ -1746,15 +1746,15 @@ function buildTree(directories) {
     const nodeMap = new Map();
     nodeMap.set("", root);
 
-    // 对目录进行排序，确保父目录在子目录之前处理
-    const sortedDirs = [...directories].sort();
+    // 对文件夹进行排序，确保父文件夹在子文件夹之前处理
+    const sortedPaths = [...folderPaths].sort();
 
-    for (const dirPath of sortedDirs) {
+    for (const folderPath of sortedPaths) {
         // 跳过空路径（根目录已创建）
-        if (!dirPath) continue;
+        if (!folderPath) continue;
 
         // 规范化路径：确保以 / 结尾
-        const normalizedPath = dirPath.endsWith('/') ? dirPath : dirPath + '/';
+        const normalizedPath = folderPath.endsWith('/') ? folderPath : folderPath + '/';
 
         // 如果节点已存在，跳过
         if (nodeMap.has(normalizedPath)) continue;
@@ -2162,7 +2162,7 @@ export async function getIndexStorageStats(context) {
  * @param {Object} context - 上下文对象
  * @returns {Object} 树形结构 { name, path, children }
  */
-export async function getDirectoryTree(context) {
+export async function getFolderTree(context) {
     // 1. 合并挂起操作
     await mergeOperationsToIndex(context);
 
@@ -2175,7 +2175,7 @@ export async function getDirectoryTree(context) {
     if (index.files && index.files.length > 0) {
         for (const file of index.files) {
             // 获取文件的目录路径
-            const dirPath = file.metadata?.Directory || extractDirectory(file.id);
+            const dirPath = file.metadata?.Folder || extractDirectory(file.id);
 
             if (dirPath) {
                 // 规范化路径：确保以 / 结尾
@@ -2194,6 +2194,6 @@ export async function getDirectoryTree(context) {
     }
 
     // 4. 构建树形结构
-    const directories = Array.from(directorySet);
-    return buildTree(directories);
+    const folderPaths = Array.from(directorySet);
+    return buildTree(folderPaths);
 }

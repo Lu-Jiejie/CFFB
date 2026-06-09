@@ -1,6 +1,7 @@
-import { fetchOthersConfig } from "../utils/sysConfig";
-import { readIndex } from "../utils/indexManager";
+import { fetchOthersConfig } from "../../utils/sysConfig";
+import { readIndex } from "../../utils/indexManager";
 import { detectDevice, resolveOrientation, addClientHintsHeaders } from "./adaptive.js";
+import { normalizeFolderPath } from "../../utils/pathNormalizer.js";
 
 // CORS 跨域响应头
 const corsHeaders = {
@@ -40,10 +41,11 @@ export async function onRequest(context) {
         return new Response(JSON.stringify({ error: "Random is disabled" }), { status: 403, headers: corsHeaders });
     }
 
-    // 处理允许的目录，每个目录调整为标准格式，去掉首尾空格，去掉开头的/，替换多个连续的/为单个/，去掉末尾的/
+    // 处理允许的目录，每个目录调整为标准格式
     const allowedDirList = allowedDir.split(',');
     const allowedDirListFormatted = allowedDirList.map(item => {
-        return item.trim().replace(/^\/+/, '').replace(/\/{2,}/g, '/').replace(/\/$/, '');
+        const normalized = normalizeFolderPath(item);
+        return normalized ? normalized.replace(/\/$/, '') : ''; // 移除末尾斜杠用于比较
     });
 
     // 从params中读取返回的文件类型
@@ -74,8 +76,9 @@ export async function onRequest(context) {
     // 其他情况（未指定或无效值）：orientation 保持空字符串，不过滤
 
     // 读取指定文件夹
-    const paramDir = requestUrl.searchParams.get('dir') || '';
-    const dir = paramDir.replace(/^\/+/, '').replace(/\/{2,}/g, '/').replace(/\/$/, '');
+    let folder = requestUrl.searchParams.get('folder');
+    folder = folder === null || folder === undefined ? '' : normalizeFolderPath(folder);
+    const dir = folder ? folder.replace(/\/$/, '') : ''; // 移除末尾斜杠用于比较
 
     // 检查是否在允许的目录中，或是允许目录的子目录
     let dirAllowed = false;
@@ -173,14 +176,17 @@ export async function onRequest(context) {
 }
 
 async function getRandomFileList(context, url, dir) {
+    // dir 已经是移除末尾斜杠的格式，用于缓存键
     // 检查缓存中是否有记录，有则直接返回
     const cache = caches.default;
-    const cacheRes = await cache.match(`${url.origin}/api/randomFileList?dir=${dir}`);
+    const cacheRes = await cache.match(`${url.origin}/api/randomFileList?folder=${dir}`);
     if (cacheRes) {
         return JSON.parse(await cacheRes.text());
     }
 
-    let allRecords = await readIndex(context, { directory: dir, count: -1, includeSubdirFiles: true, accessStatus: 'normal' });
+    // 传给 readIndex 的 folder 需要有后置斜杠（如果非空）
+    const folderParam = dir ? dir + '/' : '';
+    let allRecords = await readIndex(context, { folder: folderParam, count: -1, includeSubdirFiles: true, accessStatus: 'normal' });
 
     // 仅保留记录的name和metadata中的必要字段
     allRecords = allRecords.files?.map(item => {
@@ -193,7 +199,7 @@ async function getRandomFileList(context, url, dir) {
     });
 
     // 缓存结果，缓存时间为24小时
-    await cache.put(`${url.origin}/api/randomFileList?dir=${dir}`, new Response(JSON.stringify(allRecords), {
+    await cache.put(`${url.origin}/api/randomFileList?folder=${dir}`, new Response(JSON.stringify(allRecords), {
         headers: {
             "Content-Type": "application/json",
         }

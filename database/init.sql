@@ -23,14 +23,14 @@ CREATE TABLE IF NOT EXISTS files (
     list_type TEXT,
     timestamp INTEGER,
     label TEXT,
-    directory TEXT,
+    folder TEXT,
     channel TEXT,
     channel_name TEXT,
     tg_file_id TEXT,
     tg_chat_id TEXT,
     tg_bot_token TEXT,
     is_chunked BOOLEAN DEFAULT FALSE,
-    tags TEXT, 
+    tags TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS other_data (
 );
 
 CREATE INDEX IF NOT EXISTS idx_files_timestamp ON files(timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_files_directory ON files(directory);
+CREATE INDEX IF NOT EXISTS idx_files_folder ON files(folder);
 CREATE INDEX IF NOT EXISTS idx_files_channel ON files(channel);
 CREATE INDEX IF NOT EXISTS idx_files_file_type ON files(file_type);
 CREATE INDEX IF NOT EXISTS idx_files_upload_ip ON files(upload_ip);

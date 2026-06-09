@@ -1,4 +1,4 @@
-import { userAuthCheck, UnauthorizedResponse } from '../../utils/auth/userAuth.js';
+import { userAuthCheck, UnauthorizedResponse } from '../../../utils/auth/userAuth.js';
 import { createResponse } from '../uploadTools.js';
 
 export async function onRequestPost(context) {

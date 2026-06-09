@@ -42,7 +42,7 @@ export async function onRequest(context) {
                 const currentFolder = folderQueue.shift();
 
                 // 获取指定目录下的所有文件
-                const listUrl = new URL(`${url.origin}/api/manage/list?count=-1&dir=${currentFolder.path}`);
+                const listUrl = new URL(`${url.origin}/api/manage/list?count=-1&folder=${currentFolder.path}`);
                 const listRequest = new Request(listUrl, {
                     headers: request.headers,
                 });
@@ -65,8 +65,8 @@ export async function onRequest(context) {
                 }
 
                 // 将子文件夹添加到队列
-                const directories = listData.directories;
-                for (const dir of directories) {
+                const folders = listData.folders || listData.directories || [];
+                for (const dir of folders) {
                     folderQueue.push({
                         path: dir
                     });

@@ -1,23 +1,23 @@
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
-import { fetchSecurityConfig } from "../utils/sysConfig";
-import { TelegramAPI } from "../utils/storage/telegramAPI";
-import { DiscordAPI } from "../utils/storage/discordAPI";
-import { HuggingFaceAPI } from "../utils/storage/huggingfaceAPI";
-import { buildWebDAVUrl, WebDAVAPI } from "../utils/storage/webdavAPI";
+import { fetchSecurityConfig } from "../../utils/sysConfig";
+import { TelegramAPI } from "../../utils/storage/telegramAPI";
+import { DiscordAPI } from "../../utils/storage/discordAPI";
+import { HuggingFaceAPI } from "../../utils/storage/huggingfaceAPI";
+import { buildWebDAVUrl, WebDAVAPI } from "../../utils/storage/webdavAPI";
 import {
     setCommonHeaders, setRangeHeaders, handleHeadRequest, getFileContent, isTgChannel,
     returnWithCheck, return404, returnBlockImg, isDomainAllowed, FILE_CACHE_CONTROL
 } from './fileTools';
-import { getDatabase } from '../utils/databaseAdapter.js';
-import { authenticate } from '../utils/auth/authCore.js';
+import { getDatabase } from '../../utils/databaseAdapter.js';
+import { authenticate } from '../../utils/auth/authCore.js';
 import {
     resolveDiscordCredentials,
     resolveHuggingFaceCredentials,
     resolveS3Credentials,
     resolveTelegramCredentials,
     resolveWebDAVCredentials,
-} from '../utils/metadata/channelCredentials.js';
-import { buildCdnFileUrl } from '../utils/metadata/metadataView.js';
+} from '../../utils/metadata/channelCredentials.js';
+import { buildCdnFileUrl } from '../../utils/metadata/metadataView.js';
 
 
 export async function onRequest(context) {  // Contents of context object

@@ -1,3 +1,3 @@
-import { checkDatabaseConfig } from '../utils/middleware';
+import { checkDatabaseConfig } from '../../utils/middleware';
 
 export const onRequest = [checkDatabaseConfig];

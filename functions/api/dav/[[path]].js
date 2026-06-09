@@ -1,7 +1,8 @@
 // WebDAV 服务支持
-import { fetchOthersConfig } from "../utils/sysConfig";
-import { getDatabase } from "../utils/databaseAdapter";
-import { createApiToken } from "../api/manage/apiTokens";
+import { fetchOthersConfig } from "../../utils/sysConfig";
+import { getDatabase } from "../../utils/databaseAdapter";
+import { createApiToken } from "../manage/apiTokens";
+import { normalizeFolderPath } from "../../utils/pathNormalizer.js";
 
 export async function onRequest(context) {
     const { request, env } = context;
@@ -245,11 +246,14 @@ async function handlePropfind(request, env) {
 
 async function fetchDirectoryContents(dir, env, request) {
     let allFiles = [];
-    let allDirectories = [];
+    let allFolders = [];
     const count = -1; // Fetch all items
 
+    // 规范化文件夹路径
+    const normalizedFolder = normalizeFolderPath(dir);
+
     const listUrl = new URL(`/api/manage/list`, request.url);
-    listUrl.searchParams.set('dir', dir);
+    listUrl.searchParams.set('folder', normalizedFolder);
     listUrl.searchParams.set('count', count);
 
     const response = await fetch(listUrl.toString(), { headers: await getApiHeaders(env) });
@@ -257,17 +261,17 @@ async function fetchDirectoryContents(dir, env, request) {
         const errorText = await response.text();
         throw new Error(`API fetch error: Status ${response.status} - ${errorText}`);
     }
-    
+
     const result = await response.json();
     if (result.error) {
         throw new Error(`API error: ${result.error} - ${result.message}`);
     }
 
     if (result.files && result.files.length > 0) allFiles = allFiles.concat(result.files);
-    if (result.directories && result.directories.length > 0) allDirectories = allDirectories.concat(result.directories);
+    if (result.folders && result.folders.length > 0) allFolders = allFolders.concat(result.folders);
 
 
-    return { files: allFiles, directories: [...new Set(allDirectories)] };
+    return { files: allFiles, folders: [...new Set(allFolders)] };
 }
 
 // --- HTML and XML GENERATION ---
@@ -276,21 +280,21 @@ function generateDirectoryListingHtml(basePath, contents) {
     let fileLinks = '';
     let dirLinks = '';
 
-    for (const dir of contents.directories) {
+    for (const dir of contents.folders) {
         const fullDirPath = `/dav/${dir}/`;
         const dirName = dir.split('/').pop();
         dirLinks += `<li><a href="${fullDirPath}"><strong>${dirName}/</strong></a></li>`;
     }
 
     for (const file of contents.files) {
-        const fullFilePath = `/dav/${file.name}`; 
+        const fullFilePath = `/dav/${file.name}`;
         const fileName = file.name.split('/').pop();
-        const fileSize = file.metadata && file.metadata['FileSize'] 
-            ? `${file.metadata['FileSize']} MB` 
+        const fileSize = file.metadata && file.metadata['FileSize']
+            ? `${file.metadata['FileSize']} MB`
             : 'N/A';
         fileLinks += `<li><a href="${fullFilePath}">${fileName}</a> - ${fileSize}</li>`;
     }
-    
+
     let parentDirLink = '';
     if (basePath !== '/') {
         const parentPath = new URL('..', `http://dummy.com${basePath}`).pathname;
@@ -306,7 +310,7 @@ function generateWebDAVXml(basePath, contents) {
 
     responses += createCollectionXml(currentPath);
 
-    for (const dir of contents.directories) {
+    for (const dir of contents.folders) {
         responses += createCollectionXml(`/${dir}/`);
     }
     for (const file of contents.files) {

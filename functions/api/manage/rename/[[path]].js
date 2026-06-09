@@ -2,7 +2,7 @@ import { S3Client, CopyObjectCommand, DeleteObjectCommand } from "@aws-sdk/clien
 import { purgeCFCache, purgeRandomFileListCache, purgePublicFileListCache } from "../../../utils/purgeCache";
 import { moveFileInIndex } from "../../../utils/indexManager.js";
 import { getDatabase } from '../../../utils/databaseAdapter.js';
-import { sanitizeUploadFolder } from "../../../upload/uploadTools.js";
+import { sanitizeUploadFolder } from "../../upload/uploadTools.js";
 import { WebDAVAPI } from "../../../utils/storage/webdavAPI.js";
 import {
     resolveS3Credentials,
@@ -162,7 +162,7 @@ export async function onRequest(context) {
 
         // 更新文件夹信息，根目录为空，否则为 aaa/123/ 的格式
         const DirectoryPath = newFileId.split('/').slice(0, -1).join('/') === '' ? '' : newFileId.split('/').slice(0, -1).join('/') + '/';
-        metadata.Directory = DirectoryPath;
+        metadata.Folder = DirectoryPath;
         cleanPersistedMetadataInPlace(metadata);
 
         // 更新 KV 存储

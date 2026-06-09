@@ -39,7 +39,7 @@ export async function purgeRandomFileListCache(origin, ...dirs) {
         });
 
         for (const dir of dirs) {
-            await cache.put(`${origin}/api/randomFileList?dir=${dir}`, nullResponse);
+            await cache.put(`${origin}/api/randomFileList?folder=${dir}`, nullResponse);
         }
     } catch (error) {
         console.error('Failed to clear randomFileList cache:', error);
@@ -56,8 +56,8 @@ export async function purgePublicFileListCache(origin, ...dirs) {
 
         for (const dir of dirs) {
             // 清除递归和非递归两种缓存
-            await cache.put(`${origin}/api/publicFileList?dir=${dir}&recursive=false`, nullResponse);
-            await cache.put(`${origin}/api/publicFileList?dir=${dir}&recursive=true`, nullResponse);
+            await cache.put(`${origin}/api/publicFileList?folder=${dir}&recursive=false`, nullResponse);
+            await cache.put(`${origin}/api/publicFileList?folder=${dir}&recursive=true`, nullResponse);
         }
     } catch (error) {
         console.error('Failed to clear publicFileList cache:', error);

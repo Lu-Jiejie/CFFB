@@ -2,7 +2,7 @@
 import { createResponse, createErrorResponse, getUploadIp, getIPAddress, selectConsistentChannel, buildUniqueFileId, endUpload, sanitizeUploadFolder } from './uploadTools';
 import { retryFailedChunks, cleanupFailedMultipartUploads, checkChunkUploadStatuses, cleanupChunkData, cleanupUploadSession } from './chunkUpload';
 import { S3Client, CompleteMultipartUploadCommand } from "@aws-sdk/client-s3";
-import { getDatabase } from '../utils/databaseAdapter.js';
+import { getDatabase } from '../../utils/databaseAdapter.js';
 
 // 处理分块合并
 export async function handleChunkMerge(context) {
@@ -156,7 +156,7 @@ async function handleChannelBasedMerge(context, uploadId, totalChunks, originalF
             ListType: "None",
             TimeStamp: Date.now(),
             Label: "None",
-            Directory: normalizedFolder === '' ? '' : normalizedFolder + '/',
+            Folder: normalizedFolder === '' ? '' : normalizedFolder + '/',
             Tags: []
         };
 

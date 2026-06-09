@@ -1,5 +1,5 @@
-import { userAuthCheck, UnauthorizedResponse } from "../utils/auth/userAuth";
-import { fetchUploadConfig, fetchSecurityConfig } from "../utils/sysConfig";
+import { userAuthCheck, UnauthorizedResponse } from "../../utils/auth/userAuth";
+import { fetchUploadConfig, fetchSecurityConfig } from "../../utils/sysConfig";
 import {
     createResponse, createErrorResponse, getUploadIp, getIPAddress, resolveFileExt,
     moderateContent, purgeCDNCache, isBlockedUploadIp, buildUniqueFileId, endUpload, getImageDimensions,
@@ -7,12 +7,12 @@ import {
 } from "./uploadTools";
 import { initializeChunkedUpload, handleChunkUpload, uploadLargeFileToTelegram, handleCleanupRequest } from "./chunkUpload";
 import { handleChunkMerge } from "./chunkMerge";
-import { TelegramAPI } from "../utils/storage/telegramAPI";
-import { DiscordAPI } from "../utils/storage/discordAPI";
-import { HuggingFaceAPI } from "../utils/storage/huggingfaceAPI";
-import { WebDAVAPI } from "../utils/storage/webdavAPI";
+import { TelegramAPI } from "../../utils/storage/telegramAPI";
+import { DiscordAPI } from "../../utils/storage/discordAPI";
+import { HuggingFaceAPI } from "../../utils/storage/huggingfaceAPI";
+import { WebDAVAPI } from "../../utils/storage/webdavAPI";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { getDatabase } from '../utils/databaseAdapter.js';
+import { getDatabase } from '../../utils/databaseAdapter.js';
 
 
 export async function onRequest(context) {  // Contents of context object
@@ -94,10 +94,32 @@ async function processFileUpload(context, formdata = null) {
     const ipAddress = await getIPAddress(uploadIp);
 
     // 获取上传文件夹路径
-    let uploadFolder = url.searchParams.get('uploadFolder') || '';
+    let uploadFolder = url.searchParams.get('uploadFolder');
+
+    // 检查是否提供了文件夹参数
+    if (uploadFolder === null || uploadFolder === undefined) {
+        return createErrorResponse('Target folder is required. Please specify uploadFolder parameter.', 'FOLDER_REQUIRED', 400);
+    }
 
     // 路径安全性处理：防止路径穿越和特殊字符注入
     uploadFolder = sanitizeUploadFolder(uploadFolder);
+
+    // 验证目标文件夹是否存在
+    const db = getDatabase(context.env);
+
+    // 根目录特殊处理：空字符串表示根目录，始终存在
+    if (uploadFolder !== '') {
+        const folderKey = `folder:${uploadFolder}`;
+        const folderExists = await db.get(folderKey);
+
+        if (!folderExists) {
+            return createErrorResponse(
+                `Target folder '${uploadFolder}' does not exist. Please create it first.`,
+                'FOLDER_NOT_FOUND',
+                400
+            );
+        }
+    }
 
     let uploadChannel = 'TelegramNew';
     switch (urlParamUploadChannel) {
@@ -155,15 +177,7 @@ async function processFileUpload(context, formdata = null) {
         }
     }
 
-    // 如果上传文件夹路径为空，尝试从文件名中获取
-    if (uploadFolder === '' || uploadFolder === null || uploadFolder === undefined) {
-        uploadFolder = fileName.split('/').slice(0, -1).join('/');
-        // 对从文件名中提取的路径也进行安全处理
-        uploadFolder = sanitizeUploadFolder(uploadFolder);
-        // 从文件名中去除路径信息，只保留文件名部分
-        fileName = fileName.split('/').pop();
-    }
-    // uploadFolder 已经过 sanitizeUploadFolder 处理，直接使用
+    // uploadFolder 已经过验证和 sanitizeUploadFolder 处理，直接使用
     const normalizedFolder = uploadFolder;
 
     const metadata = {
@@ -176,7 +190,7 @@ async function processFileUpload(context, formdata = null) {
         ListType: "None",
         TimeStamp: time,
         Label: "None",
-        Directory: normalizedFolder === '' ? '' : normalizedFolder + '/',
+        Folder: normalizedFolder === '' ? '' : normalizedFolder + '/',
         Tags: []
     };
 
