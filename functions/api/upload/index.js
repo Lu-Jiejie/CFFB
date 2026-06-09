@@ -109,10 +109,33 @@ async function processFileUpload(context, formdata = null) {
 
     // 根目录特殊处理：空字符串表示根目录，始终存在
     if (uploadFolder !== '') {
-        const folderKey = `folder:${uploadFolder}`;
+        // 确保路径格式一致：文件夹 key 格式为 "folder:path/"（带末尾斜杠）
+        const folderPath = uploadFolder.endsWith('/') ? uploadFolder : uploadFolder + '/';
+        const folderKey = `folder:${folderPath}`;
+
+        console.log('Checking folder existence:', {
+            uploadFolder,
+            folderPath,
+            folderKey
+        });
+
+        // Debug: 列出所有 folder: 前缀的 key
+        const allFolders = await db.list({ prefix: 'folder:' });
+        console.log('All folder keys in DB:', allFolders.keys.map(k => k.name));
+
         const folderExists = await db.get(folderKey);
 
-        if (!folderExists) {
+        console.log('Folder check result:', {
+            value: folderExists,
+            type: typeof folderExists,
+            isNull: folderExists === null,
+            isUndefined: folderExists === undefined,
+            truthyCheck: !!folderExists
+        });
+
+        // 注意：文件夹记录的 value 是空字符串 ''，不能用 truthy 判断
+        // KV 不存在时返回 null，存在时返回存储的值（即使是空字符串）
+        if (folderExists === null) {
             return createErrorResponse(
                 `Target folder '${uploadFolder}' does not exist. Please create it first.`,
                 'FOLDER_NOT_FOUND',

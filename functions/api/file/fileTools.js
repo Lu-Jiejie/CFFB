@@ -1,9 +1,47 @@
 /* ======== 文件读取工具函数 ======== */
 
-// 判断请求域名是否在允许的域名列表中 - 功能已移除
+// 判断请求域名是否在允许的域名列表中
 export function isDomainAllowed(context) {
-    // 域名过滤功能已移除，始终返回 true
-    return true;
+    const { securityConfig, Referer } = context;
+
+    // 如果配置里禁用了域名过滤，直接通过
+    if (!securityConfig?.access?.refererCheck?.enabled) {
+        return true;
+    }
+
+    const refererCheckConfig = securityConfig.access.refererCheck;
+    const allowedDomains = refererCheckConfig.allowedDomains || [];
+    const allowEmptyReferer = refererCheckConfig.allowEmptyReferer ?? true;
+
+    // 空 Referer 处理
+    if (!Referer) {
+        return allowEmptyReferer;
+    }
+
+    // 解析 Referer 域名
+    try {
+        const refererUrl = new URL(Referer);
+        const refererHost = refererUrl.hostname;
+
+        // 检查白名单（支持完全匹配和子域名匹配）
+        const isAllowed = allowedDomains.some(domain => {
+            // 完全匹配
+            if (refererHost === domain) {
+                return true;
+            }
+            // 子域名匹配（例如：a.example.com 匹配 example.com）
+            if (refererHost.endsWith(`.${domain}`)) {
+                return true;
+            }
+            return false;
+        });
+
+        return isAllowed;
+    } catch (e) {
+        // Referer 格式错误，拒绝访问
+        console.error('Invalid Referer format:', Referer, e);
+        return false;
+    }
 }
 
 // 判断请求是否来自公开图库页面 (/browse 或 /browse/*)
@@ -100,35 +138,66 @@ export function isTgChannel(imgRecord) {
     return imgRecord.metadata?.Channel === 'Telegram' || imgRecord.metadata?.Channel === 'TelegramNew';
 }
 
-// 图片可访问性检查 - 已移除白名单/封禁功能
+// 图片可访问性检查
 export async function returnWithCheck(context, imgRecord) {
-    const isAdminPreview = context.fileAccess?.isAdminPreview === true;
-    const adminAuthorized = context.fileAccess?.adminAuthResult?.authorized === true;
+    const isPreviewMode = context.fileAccess?.isPreviewMode === true;
+    const isAuthorized = context.fileAccess?.authResult?.authorized === true;
+    const { securityConfig } = context;
     const response = new Response('success', { status: 200 });
 
-    if (isAdminPreview && !adminAuthorized) {
-        return unauthorizedAdminPreviewResponse();
+    // 预览模式需要认证
+    if (isPreviewMode && !isAuthorized) {
+        return unauthorizedPreviewResponse();
     }
 
     const record = imgRecord;
     if (record.metadata === null) {
-        context.fileAccess.cacheControl = isAdminPreview ? FILE_CACHE_CONTROL.PRIVATE : FILE_CACHE_CONTROL.PUBLIC;
+        context.fileAccess.cacheControl = isPreviewMode ? FILE_CACHE_CONTROL.PRIVATE : FILE_CACHE_CONTROL.PUBLIC;
         return response;
     }
 
-    if (isAdminPreview) {
+    // 预览模式：已认证，绕过所有限制
+    if (isPreviewMode) {
         context.fileAccess.cacheControl = FILE_CACHE_CONTROL.PRIVATE;
         return response;
     }
 
+    // 非预览模式：检查黑白名单
     context.fileAccess.cacheControl = FILE_CACHE_CONTROL.PUBLIC;
 
-    // 白名单/封禁功能已移除，所有文件均可访问
+    // 1. 检查黑名单标签（最高优先级）
+    if (record.metadata.Tags?.includes('blocked')) {
+        return await returnBlockedResponse(context.url, 'file-blocked');
+    }
+
+    // 2. 检查白名单模式
+    if (securityConfig?.access?.whiteListMode?.enabled) {
+        const fileId = record.metadata?.FileId || '';
+        const whitelistFolders = securityConfig.access.whiteListMode.folders || [];
+
+        // 2.1 检查文件是否在白名单文件夹内
+        const isInWhitelistFolder = whitelistFolders.some(folder => {
+            return fileId.startsWith(folder);
+        });
+
+        if (isInWhitelistFolder) {
+            return response;  // 在白名单文件夹，允许访问
+        }
+
+        // 2.2 检查文件是否有白名单标签
+        if (record.metadata.Tags?.includes('whitelist')) {
+            return response;  // 有白名单标签，允许访问
+        }
+
+        // 2.3 既不在白名单文件夹，也没有白名单标签，拒绝访问
+        return await returnBlockedResponse(context.url, 'whitelist-blocked');
+    }
+
     return response;
 }
 
-function unauthorizedAdminPreviewResponse() {
-    return new Response('Admin authentication required', {
+function unauthorizedPreviewResponse() {
+    return new Response('Authentication required for preview mode', {
         status: 401,
         statusText: 'Unauthorized',
         headers: {
@@ -156,6 +225,34 @@ export async function return404(url) {
                 "Content-Type": "image/png",
                 "Content-Disposition": "inline",
                 "Cache-Control": "public, max-age=86400",
+            },
+        });
+    }
+}
+
+export async function returnBlockedResponse(url, reason = 'blocked') {
+    // 尝试获取静态拦截图片
+    const blockImg = await fetch(url.origin + "/static/media/BlockImg.png");
+
+    if (!blockImg.ok) {
+        // 图片不存在，返回 302 重定向到前端页面
+        return new Response(null, {
+            status: 302,
+            headers: {
+                "Location": url.origin + "/blocked",
+                "Cache-Control": "no-store",
+                "X-Block-Reason": reason
+            }
+        });
+    } else {
+        // 图片存在，返回 403 + 图片
+        return new Response(blockImg.body, {
+            status: 403,
+            headers: {
+                "Content-Type": "image/png",
+                "Content-Disposition": "inline",
+                "Cache-Control": "public, max-age=3600",
+                "X-Block-Reason": reason
             },
         });
     }

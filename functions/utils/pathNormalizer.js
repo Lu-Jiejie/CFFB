@@ -11,6 +11,7 @@
  * 5. 去除多个连续斜杠
  * 6. 去除前置斜杠
  * 7. 确保后置斜杠（非空时）
+ * 8. 验证路径不包含非法字符和保留前缀
  *
  * 示例：
  * - "" → ""
@@ -33,5 +34,39 @@ export function normalizeFolderPath(path) {
         .replace(/^\/+/, '')           // 去除前置斜杠
         .replace(/\/+$/, '');          // 去除后置斜杠
 
-    return normalized ? normalized + '/' : '';
+    if (normalized) {
+        validatePathSafety(normalized);
+        return normalized + '/';
+    }
+    return '';
+}
+
+/**
+ * 验证路径安全性
+ * @param {string} path - 待验证的路径（不含末尾斜杠）
+ * @throws {Error} 如果路径包含非法字符或保留前缀
+ */
+export function validatePathSafety(path) {
+    // 检查非法字符：冒号、尖括号、引号、问号、星号、管道符
+    const illegalChars = /[<>:"|?*]/;
+    if (illegalChars.test(path)) {
+        throw new Error('Path contains illegal characters: < > : " | ? *');
+    }
+
+    // 检查每个路径段是否以保留前缀开头
+    const segments = path.split('/');
+    for (const segment of segments) {
+        if (!segment) continue; // 跳过空段
+
+        // 检查保留前缀
+        if (segment.startsWith('folder:')) {
+            throw new Error('Path cannot start with reserved prefix: folder:');
+        }
+        if (segment.startsWith('manage@')) {
+            throw new Error('Path cannot start with reserved prefix: manage@');
+        }
+        if (segment.startsWith('chunk_')) {
+            throw new Error('Path cannot start with reserved prefix: chunk_');
+        }
+    }
 }

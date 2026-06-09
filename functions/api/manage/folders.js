@@ -1,5 +1,6 @@
 import { getDatabase } from '../../utils/databaseAdapter.js';
 import { normalizeFolderPath } from '../../utils/pathNormalizer.js';
+import { addFileToIndex, removeFileFromIndex } from '../../utils/indexManager.js';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -17,11 +18,11 @@ export async function onRequest(context) {
     const db = getDatabase(env);
 
     if (request.method === 'POST') {
-        return await createFolder(db, request, corsHeaders);
+        return await createFolder(db, env, request, corsHeaders);
     }
 
     if (request.method === 'DELETE') {
-        return await deleteFolder(db, request, corsHeaders);
+        return await deleteFolder(db, env, request, corsHeaders);
     }
 
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
@@ -30,7 +31,7 @@ export async function onRequest(context) {
     });
 }
 
-async function createFolder(db, request, corsHeaders) {
+async function createFolder(db, env, request, corsHeaders) {
     try {
         const body = await request.json();
         let { path, createParents } = body;
@@ -46,7 +47,7 @@ async function createFolder(db, request, corsHeaders) {
             });
         }
 
-        // 路径规范化
+        // 路径规范化（包含安全验证）
         path = normalizeFolderPath(path);
 
         if (!path) {
@@ -83,8 +84,8 @@ async function createFolder(db, request, corsHeaders) {
 
             if (!parentExists) {
                 if (createParents) {
-                    // 递归创建父文件夹
-                    await createFolderRecursive(db, parentFolder);
+                    // 递归创建父文件夹（会自动添加到索引）
+                    await createFolderRecursive(db, env, parentFolder);
                 } else {
                     return new Response(JSON.stringify({
                         success: false,
@@ -109,7 +110,20 @@ async function createFolder(db, request, corsHeaders) {
             TimeStamp: Date.now()
         };
 
+        console.log('Creating folder:', {
+            path,
+            folderKey,
+            folderName,
+            parentFolder,
+            metadata
+        });
+
         await db.put(folderKey, '', { metadata });
+
+        console.log('Folder record created in DB with key:', folderKey);
+
+        // 添加到索引
+        await addFileToIndex({ env }, path, metadata);
 
         return new Response(JSON.stringify({
             success: true,
@@ -138,7 +152,7 @@ async function createFolder(db, request, corsHeaders) {
     }
 }
 
-async function deleteFolder(db, request, corsHeaders) {
+async function deleteFolder(db, env, request, corsHeaders) {
     try {
         const body = await request.json();
         let { path, recursive } = body;
@@ -196,12 +210,18 @@ async function deleteFolder(db, request, corsHeaders) {
         // 删除文件夹标记
         await db.delete(folderKey);
 
+        // 从索引移除
+        await removeFileFromIndex({ env }, path);
+
         // 递归删除
         if (recursive) {
             // 删除所有子文件夹
             const subfolders = await db.list({ prefix: `folder:${path}` });
             for (const key of subfolders.keys) {
                 await db.delete(key.name);
+                // 从索引移除子文件夹
+                const subPath = key.name.substring(7); // 移除 "folder:" 前缀
+                await removeFileFromIndex({ env }, subPath);
             }
 
             // 删除所有文件
@@ -209,6 +229,8 @@ async function deleteFolder(db, request, corsHeaders) {
             for (const key of files.keys) {
                 if (!key.name.startsWith('folder:')) {
                     await db.delete(key.name);
+                    // 从索引移除文件
+                    await removeFileFromIndex({ env }, key.name);
                 }
             }
         }
@@ -247,7 +269,7 @@ function getParentFolder(path) {
     return normalized.substring(0, lastSlash + 1);
 }
 
-async function createFolderRecursive(db, path) {
+async function createFolderRecursive(db, env, path) {
     if (!path) return;
 
     const folderKey = `folder:${path}`;
@@ -257,7 +279,7 @@ async function createFolderRecursive(db, path) {
     // 递归创建父文件夹
     const parentFolder = getParentFolder(path);
     if (parentFolder) {
-        await createFolderRecursive(db, parentFolder);
+        await createFolderRecursive(db, env, parentFolder);
     }
 
     // 创建当前文件夹
@@ -270,4 +292,7 @@ async function createFolderRecursive(db, path) {
     };
 
     await db.put(folderKey, '', { metadata });
+
+    // 添加到索引
+    await addFileToIndex({ env }, path, metadata);
 }

@@ -85,6 +85,17 @@ export function sanitizeFileName(fileName) {
     fileName = decodeURIComponent(fileName);
     fileName = fileName.split('/').pop();
 
+    // 检查保留前缀
+    if (fileName.startsWith('folder:')) {
+        throw new Error('Filename cannot start with reserved prefix: folder:');
+    }
+    if (fileName.startsWith('manage@')) {
+        throw new Error('Filename cannot start with reserved prefix: manage@');
+    }
+    if (fileName.startsWith('chunk_')) {
+        throw new Error('Filename cannot start with reserved prefix: chunk_');
+    }
+
     const unsafeCharsRe = /[\\\/:\*\?"'<>\| \(\)\[\]\{\}#%\^`~;@&=\+\$,]/g;
     return fileName.replace(unsafeCharsRe, '_');
 }

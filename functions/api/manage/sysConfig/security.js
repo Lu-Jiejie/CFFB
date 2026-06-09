@@ -117,12 +117,23 @@ export async function getSecurityConfig(db, env) {
     }
     settings.upload = upload
 
-    // 访问管理 - 已移除域名过滤和白名单功能
+    // 访问管理
     const kvAccess = settingsKV.access || {}
     const access = {
         // 会话安全策略字段（单用户单角色：统一一个会话有效期）
         sessionSecure: kvAccess.sessionSecure ?? false,
         sessionMaxAge: kvAccess.sessionMaxAge ?? 14,
+        // Referer 防盗链
+        refererCheck: {
+            enabled: kvAccess.refererCheck?.enabled ?? false,
+            allowedDomains: kvAccess.refererCheck?.allowedDomains || [],
+            allowEmptyReferer: kvAccess.refererCheck?.allowEmptyReferer ?? true,
+        },
+        // 白名单模式
+        whiteListMode: {
+            enabled: kvAccess.whiteListMode?.enabled ?? false,
+            folders: kvAccess.whiteListMode?.folders || []
+        }
     }
     settings.access = access
 

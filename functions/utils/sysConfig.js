@@ -95,7 +95,7 @@ export async function fetchSecurityConfig(env) {
         return settings;
     } catch (error) {
         console.error('Failed to fetch security config:', error);
-        // 返回默认配置 - 已移除域名过滤和白名单功能
+        // 返回默认配置
         return {
             auth: {
                 password: ""
@@ -103,7 +103,19 @@ export async function fetchSecurityConfig(env) {
             upload: {
                 moderate: { enabled: false, channel: "default", moderateContentApiKey: "", nsfwApiPath: "" }
             },
-            access: { sessionSecure: false, sessionMaxAge: 14 }
+            access: {
+                sessionSecure: false,
+                sessionMaxAge: 14,
+                refererCheck: {
+                    enabled: false,
+                    allowedDomains: [],
+                    allowEmptyReferer: true
+                },
+                whiteListMode: {
+                    enabled: false,
+                    folders: []
+                }
+            }
         };
     }
 }

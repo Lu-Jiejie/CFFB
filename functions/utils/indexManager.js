@@ -699,10 +699,14 @@ export async function readIndex(context, options = {}) {
         // 分页处理
         const totalCount = filteredFiles.length;
 
-        let resultFiles = filteredFiles;
+        // 分离文件和文件夹记录
+        const actualFiles = filteredFiles.filter(item => item.metadata.Type !== 'folder');
+        const folderRecords = filteredFiles.filter(item => item.metadata.Type === 'folder');
+
+        let resultFiles = actualFiles;
 
         // 计算当前目录下的直接文件（不包含子目录文件）
-        const directFiles = filteredFiles.filter(file => {
+        const directFiles = actualFiles.filter(file => {
             const fileDir = file.metadata.Folder ? file.metadata.Folder : extractDirectory(file.id);
             return fileDir === dirPrefix;
         });
@@ -719,15 +723,36 @@ export async function readIndex(context, options = {}) {
             resultFiles = resultFiles.slice(startIndex, endIndex);
         }
 
-        // 提取文件夹信息
+        // 提取文件夹信息（包括索引中记录的文件夹和从文件路径提取的文件夹）
         const folders = new Set();
-        filteredFiles.forEach(file => {
+
+        // 从文件夹记录中提取
+        folderRecords.forEach(folder => {
+            // 文件夹的 id 就是其路径（带末尾斜杠）
+            const folderPath = folder.id.endsWith('/') ? folder.id : folder.id + '/';
+            if (folderPath.startsWith(dirPrefix) && folderPath !== dirPrefix) {
+                const relativePath = folderPath.substring(dirPrefix.length);
+                const firstSlashIndex = relativePath.indexOf('/');
+                // relativePath 格式如 "test/" 或 "photos/2024/"
+                if (firstSlashIndex !== -1) {
+                    // 提取第一级文件夹名
+                    const firstLevel = relativePath.substring(0, firstSlashIndex);
+                    if (firstLevel) {
+                        const subDir = dirPrefix + firstLevel + '/';
+                        folders.add(subDir);
+                    }
+                }
+            }
+        });
+
+        // 从文件路径中提取（用于推断隐式文件夹）
+        actualFiles.forEach(file => {
             const fileDir = file.metadata.Folder ? file.metadata.Folder : extractDirectory(file.id);
             if (fileDir && fileDir.startsWith(dirPrefix)) {
                 const relativePath = fileDir.substring(dirPrefix.length);
                 const firstSlashIndex = relativePath.indexOf('/');
                 if (firstSlashIndex !== -1) {
-                    const subDir = dirPrefix + relativePath.substring(0, firstSlashIndex);
+                    const subDir = dirPrefix + relativePath.substring(0, firstSlashIndex + 1);
                     folders.add(subDir);
                 }
             }
@@ -781,7 +806,7 @@ export async function rebuildIndex(context, progressCallback = null) {
             lastOperationId: null
         };
 
-        // 分批读取所有文件
+        // 分批读取所有文件和文件夹
         while (true) {
             const response = await db.list({
                 limit: KV_LIST_LIMIT,
@@ -791,23 +816,30 @@ export async function rebuildIndex(context, progressCallback = null) {
             cursor = response.cursor;
 
             for (const item of response.keys) {
-                // 跳过管理相关的键
+                // 跳过管理相关的键和分块上传临时数据
                 if (item.name.startsWith('manage@') || item.name.startsWith('chunk_')) {
                     continue;
                 }
 
-                // 跳过没有元数据的文件
+                // 跳过没有元数据的记录
                 if (!item.metadata || !item.metadata.TimeStamp) {
                     continue;
                 }
 
-                // 构建文件索引项
-                const fileItem = {
-                    id: item.name,
+                // 构建索引项（可能是文件或文件夹）
+                let itemId = item.name;
+
+                // 如果是文件夹标记（folder:前缀），提取实际路径
+                if (item.name.startsWith('folder:')) {
+                    itemId = item.name.substring(7); // 移除 "folder:" 前缀
+                }
+
+                const indexItem = {
+                    id: itemId,
                     metadata: item.metadata || {}
                 };
 
-                newIndex.files.push(fileItem);
+                newIndex.files.push(indexItem);
                 processedCount++;
 
                 // 报告进度
@@ -817,7 +849,7 @@ export async function rebuildIndex(context, progressCallback = null) {
             }
 
             if (!cursor) break;
-            
+
             // 添加协作点
             await new Promise(resolve => setTimeout(resolve, 10));
         }
@@ -842,7 +874,7 @@ export async function rebuildIndex(context, progressCallback = null) {
         waitUntil(clearChunkedIndex(context, true));
 
 
-        console.log(`Index rebuild completed. Processed ${processedCount} files, indexed ${newIndex.totalCount} files.`);
+        console.log(`Index rebuild completed. Processed ${processedCount} records (files and folders), indexed ${newIndex.totalCount} total.`);
         return {
             success: true,
             processedCount,

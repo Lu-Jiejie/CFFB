@@ -6,7 +6,7 @@ import { HuggingFaceAPI } from "../../utils/storage/huggingfaceAPI";
 import { buildWebDAVUrl, WebDAVAPI } from "../../utils/storage/webdavAPI";
 import {
     setCommonHeaders, setRangeHeaders, handleHeadRequest, getFileContent, isTgChannel,
-    returnWithCheck, return404, returnBlockImg, isDomainAllowed, FILE_CACHE_CONTROL
+    returnWithCheck, return404, returnBlockImg, returnBlockedResponse, isDomainAllowed, FILE_CACHE_CONTROL
 } from './fileTools';
 import { getDatabase } from '../../utils/databaseAdapter.js';
 import { authenticate } from '../../utils/auth/authCore.js';
@@ -53,7 +53,7 @@ export async function onRequest(context) {  // Contents of context object
 
     // 检查引用域名是否被允许
     if (!isDomainAllowed(context)) {
-        return await returnBlockImg(url);
+        return await returnBlockedResponse(url, 'referer-blocked');
     }
 
     // 从数据库中获取图片记录
@@ -178,15 +178,15 @@ export async function onRequest(context) {  // Contents of context object
 
 async function buildFileAccessContext(context) {
     const { request, env, url } = context;
-    const fromAdmin = url.searchParams.get('from') === 'admin';
+    const isPreviewMode = url.searchParams.get('preview') === 'true';
     const fileAccess = {
-        isAdminPreview: fromAdmin,
-        adminAuthResult: { authorized: false },
+        isPreviewMode: isPreviewMode,
+        authResult: { authorized: false },
         cacheControl: undefined,
     };
 
-    if (fileAccess.isAdminPreview) {
-        fileAccess.adminAuthResult = await authenticate({
+    if (fileAccess.isPreviewMode) {
+        fileAccess.authResult = await authenticate({
             env,
             request,
             requiredPermission: 'manage',
@@ -201,9 +201,11 @@ function getFileCacheControl(context) {
 }
 
 function getChunkedFileCacheControl(context) {
+    // Cloudflare CDN 支持 Range 请求，可以安全缓存分片文件
+    // 对于管理预览，仍使用 NO_STORE
     return getFileCacheControl(context) === FILE_CACHE_CONTROL.NO_STORE
         ? FILE_CACHE_CONTROL.NO_STORE
-        : FILE_CACHE_CONTROL.PRIVATE;
+        : FILE_CACHE_CONTROL.PUBLIC; // 改为 PUBLIC，让 CDN 缓存大文件
 }
 
 
@@ -349,8 +351,7 @@ async function handleTelegramChunkedFile(context, imgRecord, encodedFileName, fi
                 headers,
             });
         } else {
-            headers.set('Cache-Control', getChunkedFileCacheControl(context)); // CDN 不缓存完整文件，避免 CDN 不支持 Range 请求
-
+            // 完整文件响应，使用公开缓存策略让 CDN 缓存
             return new Response(stream, {
                 status: 200,
                 headers,
@@ -543,8 +544,7 @@ async function handleDiscordChunkedFile(context, imgRecord, encodedFileName, fil
                 headers,
             });
         } else {
-            headers.set('Cache-Control', getChunkedFileCacheControl(context));
-
+            // 完整文件响应，使用公开缓存策略让 CDN 缓存
             return new Response(stream, {
                 status: 200,
                 headers,
