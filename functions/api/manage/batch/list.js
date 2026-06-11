@@ -44,8 +44,8 @@ function errorResponse(message, status = 400) {
 
 /**
  * 检查文件是否为需要读取 value 的分块文件
- * 仅 TelegramNew 和 Discord 渠道的分块文件需要读取 value
- * 
+ * 仅 Telegram 和 Discord 渠道的分块文件需要读取 value
+ *
  * @param {Object} metadata - 文件元数据
  * @returns {boolean}
  */
@@ -53,9 +53,9 @@ function isChunkedFileNeedingValue(metadata) {
   if (!metadata || !metadata.IsChunked) {
     return false;
   }
-  
+
   const channel = metadata.Channel;
-  return channel === 'TelegramNew' || channel === 'Discord';
+  return channel === 'Telegram' || channel === 'TelegramNew' || channel === 'Discord';
 }
 
 /**

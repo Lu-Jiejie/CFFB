@@ -7,7 +7,7 @@
 import { HuggingFaceAPI } from '../../../utils/storage/huggingfaceAPI.js';
 import { fetchUploadConfig } from '../../../utils/sysConfig.js';
 import { getDatabase } from '../../../utils/databaseAdapter.js';
-import { moderateContent, endUpload, getUploadIp, getIPAddress, sanitizeUploadFolder, createResponse } from '../uploadTools.js';
+import { endUpload, getUploadIp, getIPAddress, sanitizeUploadFolder, createResponse } from '../uploadTools.js';
 import { userAuthCheck, UnauthorizedResponse } from '../../../utils/auth/userAuth.js';
 
 export async function onRequestPost(context) {
@@ -94,6 +94,13 @@ export async function onRequestPost(context) {
         const uploadIp = getUploadIp(request) || '';
         const uploadAddress = await getIPAddress(uploadIp);
 
+        // 获取前端提交的标签（可选）
+        const uploadTags = url.searchParams.get('tags');
+        let tagsArray = [];
+        if (uploadTags) {
+            tagsArray = uploadTags.split(',').map(t => t.trim()).filter(t => t.length > 0);
+        }
+
         // 构建 metadata
         const metadata = {
             FileName: fileName || fullId,
@@ -102,24 +109,11 @@ export async function onRequestPost(context) {
             ChannelName: hfChannel.name || "HuggingFace_env",
             FileSize: (fileSize / 1024 / 1024).toFixed(2),
             FileSizeBytes: fileSize,
-            UploadIP: uploadIp,
-            UploadAddress: uploadAddress,
-            ListType: "None",
             HfFilePath: filePath,
             TimeStamp: Date.now(),
-            Label: "None",
             Folder: normalizedDirectory,
-            Tags: []
+            Tags: tagsArray
         };
-
-        // 图像审查（公开仓库）
-        if (!hfChannel.isPrivate) {
-            try {
-                metadata.Label = await moderateContent(env, fileUrl);
-            } catch (e) {
-                console.warn('Content moderation failed:', e.message);
-            }
-        }
 
         // 写入数据库
         const db = getDatabase(env);

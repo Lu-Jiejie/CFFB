@@ -1,5 +1,5 @@
 /* ========== 分块合并处理 ========== */
-import { createResponse, createErrorResponse, getUploadIp, getIPAddress, selectConsistentChannel, buildUniqueFileId, endUpload, sanitizeUploadFolder } from './uploadTools';
+import { createResponse, createErrorResponse, getUploadIp, selectConsistentChannel, buildUniqueFileId, endUpload, sanitizeUploadFolder } from './uploadTools';
 import { retryFailedChunks, cleanupFailedMultipartUploads, checkChunkUploadStatuses, cleanupChunkData, cleanupUploadSession } from './chunkUpload';
 import { S3Client, CompleteMultipartUploadCommand } from "@aws-sdk/client-s3";
 import { getDatabase } from '../../utils/databaseAdapter.js';
@@ -146,18 +146,21 @@ async function handleChannelBasedMerge(context, uploadId, totalChunks, originalF
 
         const normalizedFolder = sanitizeUploadFolder(url.searchParams.get('uploadFolder') || '');
 
+        // 获取前端提交的标签（可选）
+        const uploadTags = url.searchParams.get('tags');
+        let tagsArray = [];
+        if (uploadTags) {
+            tagsArray = uploadTags.split(',').map(t => t.trim()).filter(t => t.length > 0);
+        }
+
         // 构建基础metadata
         const metadata = {
             FileName: originalFileName,
             FileType: originalFileType,
             FileSize: '0', // 会在最终合并后更新
-            UploadIP: uploadIp,
-            UploadAddress: await getIPAddress(uploadIp),
-            ListType: "None",
             TimeStamp: Date.now(),
-            Label: "None",
             Folder: normalizedFolder === '' ? '' : normalizedFolder + '/',
-            Tags: []
+            Tags: tagsArray
         };
 
         // 收集所有已上传的分块信息
@@ -459,7 +462,7 @@ async function mergeTelegramChunksInfo(context, uploadId, completedChunks, metad
         const finalFileId = await buildUniqueFileId(context, metadata.FileName, metadata.FileType);
 
         // 更新metadata
-        metadata.Channel = "TelegramNew";
+        metadata.Channel = "Telegram";
         metadata.ChannelName = tgChannel.name;
         metadata.IsChunked = true;
         metadata.TotalChunks = completedChunks.length;

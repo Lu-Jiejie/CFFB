@@ -137,25 +137,23 @@ export async function onRequest(context) {  // Contents of context object
     if (isTgChannel(imgRecord)) {
         let TgFileID = ''; // Tg的file_id
 
-        if (imgRecord.metadata?.Channel === 'Telegram') {
-            TgFileID = fileId.split('.')[0]; // id为file_id + ext
-        } else if (imgRecord.metadata?.Channel === 'TelegramNew') {
-            // 检查是否为分片文件
-            if (imgRecord.metadata?.IsChunked === true) {
-                return await cacheResponse(await handleTelegramChunkedFile(context, imgRecord, encodedFileName, fileType), context);
-            }
+        // 检查是否为分片文件
+        if (imgRecord.metadata?.IsChunked === true) {
+            return await cacheResponse(await handleTelegramChunkedFile(context, imgRecord, encodedFileName, fileType), context);
+        }
 
-            TgFileID = imgRecord.metadata?.TgFileId;
+        // 优先使用 TgFileId（新格式），兼容旧格式（从 fileId 提取）
+        TgFileID = imgRecord.metadata?.TgFileId || fileId.split('.')[0];
 
-            if (TgFileID === null) {
-                return new Response('Error: Failed to fetch image', { status: 500 });
-            }
+        if (!TgFileID) {
+            return new Response('Error: Failed to fetch image', { status: 500 });
         }
 
         // 获取TG图片真实地址（支持代理域名）
         const tgCredentials = await resolveTelegramCredentials(db, env, imgRecord.metadata);
         const TgBotToken = tgCredentials.botToken;
         const TgProxyUrl = tgCredentials.proxyUrl || '';
+        console.log(`[Telegram] Fetching file with bot token ending: ...${TgBotToken.slice(-10)}, fileId: ${TgFileID}`);
         const tgApi = new TelegramAPI(TgBotToken, TgProxyUrl);
         const filePath = await tgApi.getFilePath(TgFileID);
         if (filePath === null) {
@@ -201,13 +199,12 @@ async function buildFileAccessContext(context) {
         cacheControl: undefined,
     };
 
-    if (fileAccess.isPreviewMode) {
-        fileAccess.authResult = await authenticate({
-            env,
-            request,
-            requiredPermission: 'manage',
-        });
-    }
+    // 预览模式或普通请求都尝试验证会话
+    fileAccess.authResult = await authenticate({
+        env,
+        request,
+        requiredPermission: 'manage',
+    });
 
     return fileAccess;
 }

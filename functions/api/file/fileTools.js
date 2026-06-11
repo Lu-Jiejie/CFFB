@@ -157,12 +157,18 @@ export async function returnWithCheck(context, imgRecord) {
     }
 
     // 预览模式：已认证，绕过所有限制
-    if (isPreviewMode) {
+    if (isPreviewMode && isAuthorized) {
         context.fileAccess.cacheControl = FILE_CACHE_CONTROL.PRIVATE;
         return response;
     }
 
-    // 非预览模式：检查黑白名单
+    // 已登录用户（即使不是预览模式）：绕过所有限制，使用私有缓存
+    if (isAuthorized) {
+        context.fileAccess.cacheControl = FILE_CACHE_CONTROL.PRIVATE;
+        return response;
+    }
+
+    // 非预览模式且未登录：检查黑白名单
     context.fileAccess.cacheControl = FILE_CACHE_CONTROL.PUBLIC;
 
     // 1. 检查黑名单标签（最高优先级）

@@ -163,6 +163,7 @@ export async function onRequest(context) {
         // 更新文件夹信息，根目录为空，否则为 aaa/123/ 的格式
         const DirectoryPath = newFileId.split('/').slice(0, -1).join('/') === '' ? '' : newFileId.split('/').slice(0, -1).join('/') + '/';
         metadata.Folder = DirectoryPath;
+        metadata.FileName = newFileId.split('/').pop();
         cleanPersistedMetadataInPlace(metadata);
 
         // 更新 KV 存储

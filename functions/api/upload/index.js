@@ -1,8 +1,8 @@
 import { userAuthCheck, UnauthorizedResponse } from "../../utils/auth/userAuth";
 import { fetchUploadConfig, fetchSecurityConfig } from "../../utils/sysConfig";
 import {
-    createResponse, createErrorResponse, getUploadIp, getIPAddress, resolveFileExt,
-    moderateContent, purgeCDNCache, isBlockedUploadIp, buildUniqueFileId, endUpload, getImageDimensions,
+    createResponse, createErrorResponse, getUploadIp, resolveFileExt,
+    purgeCDNCache, isBlockedUploadIp, buildUniqueFileId, endUpload, getImageDimensions,
     sanitizeUploadFolder
 } from "./uploadTools";
 import { initializeChunkedUpload, handleChunkUpload, uploadLargeFileToTelegram, handleCleanupRequest } from "./chunkUpload";
@@ -91,15 +91,9 @@ async function processFileUpload(context, formdata = null) {
 
     // 获取IP地址
     const uploadIp = getUploadIp(request);
-    const ipAddress = await getIPAddress(uploadIp);
 
-    // 获取上传文件夹路径
-    let uploadFolder = url.searchParams.get('uploadFolder');
-
-    // 检查是否提供了文件夹参数
-    if (uploadFolder === null || uploadFolder === undefined) {
-        return createErrorResponse('Target folder is required. Please specify uploadFolder parameter.', 'FOLDER_REQUIRED', 400);
-    }
+    // 获取上传文件夹路径（默认为空字符串，表示根目录）
+    let uploadFolder = url.searchParams.get('uploadFolder') || '';
 
     // 路径安全性处理：防止路径穿越和特殊字符注入
     uploadFolder = sanitizeUploadFolder(uploadFolder);
@@ -144,10 +138,10 @@ async function processFileUpload(context, formdata = null) {
         }
     }
 
-    let uploadChannel = 'TelegramNew';
+    let uploadChannel = 'Telegram';
     switch (urlParamUploadChannel) {
         case 'telegram':
-            uploadChannel = 'TelegramNew';
+            uploadChannel = 'Telegram';
             break;
         case 'cfr2':
             uploadChannel = 'CloudflareR2';
@@ -168,12 +162,20 @@ async function processFileUpload(context, formdata = null) {
             uploadChannel = 'External';
             break;
         default:
-            uploadChannel = 'TelegramNew';
+            uploadChannel = 'Telegram';
             break;
     }
 
     // 将指定的渠道名称存入 context，供后续上传函数使用
     context.specifiedChannelName = urlParamChannelName || null;
+
+    // 获取前端提交的标签（可选）
+    const uploadTags = url.searchParams.get('tags');
+    let tagsArray = [];
+    if (uploadTags) {
+        // 支持逗号分隔的标签列表，去除空白并过滤空标签
+        tagsArray = uploadTags.split(',').map(t => t.trim()).filter(t => t.length > 0);
+    }
 
     // 获取文件信息
     const time = new Date().getTime();
@@ -208,13 +210,9 @@ async function processFileUpload(context, formdata = null) {
         FileType: fileType,
         FileSize: fileSize,
         FileSizeBytes: fileSizeBytes,
-        UploadIP: uploadIp,
-        UploadAddress: ipAddress,
-        ListType: "None",
         TimeStamp: time,
-        Label: "None",
         Folder: normalizedFolder === '' ? '' : normalizedFolder + '/',
-        Tags: []
+        Tags: tagsArray
     };
 
     // 添加图片尺寸信息
@@ -296,11 +294,6 @@ async function uploadFileToCloudflareR2(context, fullId, metadata, returnLink) {
     // 更新metadata
     metadata.Channel = "CloudflareR2";
     metadata.ChannelName = r2Channel.name || "R2_env";
-
-    // 图像审查，采用R2的publicUrl
-    const R2PublicUrl = r2Channel.publicUrl;
-    let moderateUrl = `${R2PublicUrl}/${fullId}`;
-    metadata.Label = await moderateContent(env, moderateUrl);
 
     // 写入数据库
     try {
@@ -397,19 +390,6 @@ async function uploadFileToS3(context, fullId, metadata, returnLink) {
         metadata.Channel = "S3";
         metadata.ChannelName = s3Channel.name;
         metadata.S3FileKey = s3FileName;
-
-        // 图像审查
-        if (uploadModerate && uploadModerate.enabled) {
-            try {
-                await db.put(fullId, "", { metadata });
-            } catch {
-                return createErrorResponse('Failed to write to KV database', 'DATABASE_WRITE_FAILED', 500);
-            }
-
-            const moderateUrl = `https://${url.hostname}/file/${fullId}`;
-            await purgeCDNCache(env, moderateUrl, url);
-            metadata.Label = await moderateContent(env, moderateUrl);
-        }
 
         // 写入数据库
         try {
@@ -514,6 +494,13 @@ async function uploadFileToTelegram(context, fullId, metadata, fileExt, fileName
         sendFunction = { 'url': 'sendDocument', 'type': 'document' };
     }
 
+    // 文件大小限制检查：sendPhoto/sendAnimation 最大 10MB，超过则使用 sendDocument（最大 50MB）
+    console.log(`[Telegram] File size: ${fileSize}, sendFunction: ${sendFunction.url}`);
+    if ((sendFunction.url === 'sendPhoto' || sendFunction.url === 'sendAnimation') && fileSize > 10 * 1024 * 1024) {
+        console.log(`[Telegram] File too large (${fileSize} bytes), switching to sendDocument`);
+        sendFunction = { 'url': 'sendDocument', 'type': 'document' };
+    }
+
     // 上传文件到 Telegram
     let res = createErrorResponse('Telegram upload failed, check your environment params about telegram channel', 'TELEGRAM_UPLOAD_FAILED', 400);
     try {
@@ -542,14 +529,9 @@ async function uploadFileToTelegram(context, fullId, metadata, fileExt, fileName
         );
 
 
-        // 图像审查（使用代理域名或官方域名）
-        const moderateDomain = tgProxyUrl ? `https://${tgProxyUrl}` : 'https://api.telegram.org';
-        const moderateUrl = `${moderateDomain}/file/bot${tgBotToken}/${filePath}`;
-        metadata.Label = await moderateContent(env, moderateUrl);
-
         // 更新metadata，写入KV数据库
         try {
-            metadata.Channel = "TelegramNew";
+            metadata.Channel = "Telegram";
             metadata.ChannelName = tgChannel.name;
 
             metadata.TgFileId = id;
@@ -564,8 +546,12 @@ async function uploadFileToTelegram(context, fullId, metadata, fileExt, fileName
         waitUntil(endUpload(context, fullId, metadata));
 
     } catch (error) {
-        console.log('Telegram upload error:', error.message);
-        res = createErrorResponse('Telegram upload failed, check your environment params about telegram channel', 'TELEGRAM_UPLOAD_FAILED', 400);
+        console.error('Telegram upload error:', error);
+        res = createErrorResponse(
+            `Telegram upload failed: ${error.message || 'Unknown error'}`,
+            'TELEGRAM_UPLOAD_FAILED',
+            500
+        );
     } finally {
         return res;
     }
@@ -675,13 +661,6 @@ async function uploadFileToDiscord(context, fullId, metadata, returnLink) {
         // 注意：不存储 DiscordAttachmentUrl，因为 Discord 附件 URL 会在约24小时后过期
         // 读取时会通过 API 获取新的 URL
 
-        // 图像审查（使用 Discord CDN URL 或代理 URL）
-        let moderateUrl = fileInfo.url;
-        if (discordChannel.proxyUrl) {
-            moderateUrl = fileInfo.url.replace('https://cdn.discordapp.com', `https://${discordChannel.proxyUrl}`);
-        }
-        metadata.Label = await moderateContent(env, moderateUrl);
-
         // 写入 KV 数据库
         try {
             await db.put(fullId, "", { metadata });
@@ -780,28 +759,6 @@ async function uploadFileToHuggingFace(context, fullId, metadata, returnLink) {
         metadata.ChannelName = hfChannel.name || "HuggingFace_env";
         metadata.HfFilePath = hfFilePath;
 
-        // 图像审查
-        const securityConfig = context.securityConfig;
-        const uploadModerate = securityConfig.upload?.moderate;
-        
-        if (uploadModerate && uploadModerate.enabled) {
-            if (!hfChannel.isPrivate) {
-                // 公开仓库：直接通过公开URL访问进行审查，只写入1次KV
-                metadata.Label = await moderateContent(env, result.fileUrl);
-            } else {
-                // 私有仓库：先写入KV，再通过自己的域名访问进行审查
-                try {
-                    await db.put(fullId, "", { metadata });
-                } catch (error) {
-                    return createErrorResponse('Failed to write to KV database', 'DATABASE_WRITE_FAILED', 500);
-                }
-                
-                const moderateUrl = `https://${context.url.hostname}/file/${fullId}`;
-                await purgeCDNCache(env, moderateUrl, context.url);
-                metadata.Label = await moderateContent(env, moderateUrl);
-            }
-        }
-
         // 写入 KV 数据库
         try {
             await db.put(fullId, "", { metadata });
@@ -865,26 +822,6 @@ async function uploadFileToWebDAV(context, fullId, metadata, returnLink) {
         metadata.Channel = "WebDAV";
         metadata.ChannelName = webdavChannel.name || "WebDAV_env";
         metadata.WebDAVFilePath = fullId;
-        const webdavPublicUrl = webdavChannel.publicUrl
-            ? webdavAPI.buildPublicUrl(fullId, webdavChannel.publicUrl)
-            : '';
-
-        const uploadModerate = securityConfig.upload?.moderate;
-        if (uploadModerate && uploadModerate.enabled) {
-            if (webdavPublicUrl) {
-                metadata.Label = await moderateContent(env, webdavPublicUrl);
-            } else {
-                try {
-                    await db.put(fullId, "", { metadata });
-                } catch {
-                    return createErrorResponse('Failed to write to database', 'DATABASE_WRITE_FAILED', 500);
-                }
-
-                const moderateUrl = `https://${url.hostname}/file/${fullId}`;
-                await purgeCDNCache(env, moderateUrl, url);
-                metadata.Label = await moderateContent(env, moderateUrl);
-            }
-        }
 
         try {
             await db.put(fullId, "", { metadata });

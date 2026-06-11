@@ -41,7 +41,7 @@ export async function onRequest(context) {
         const channels = {
             telegram: uploadConfig.telegram.channels.map(ch => ({
                 name: ch.name,
-                type: 'TelegramNew'
+                type: 'Telegram'
             })),
             cfr2: uploadConfig.cfr2.channels.map(ch => ({
                 name: ch.name,

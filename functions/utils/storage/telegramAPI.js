@@ -41,12 +41,14 @@ export class TelegramAPI {
             body: formData
         });
         console.log('Telegram API response:', response.status, response.statusText);
-        if (!response.ok) {
-            throw new Error(`Telegram API error: ${response.statusText}`);
-        }
 
         // 解析响应数据
         const responseData = await response.json();
+
+        if (!response.ok) {
+            const errorMsg = responseData?.description || response.statusText;
+            throw new Error(`Telegram API error: ${errorMsg}`);
+        }
 
         return responseData;
     }
@@ -112,6 +114,7 @@ export class TelegramAPI {
             if (responseData.ok) {
                 return responseData.result.file_path;
             } else {
+                console.error('Telegram getFile failed:', responseData.description || responseData);
                 return null;
             }
         } catch (error) {

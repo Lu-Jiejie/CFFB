@@ -1380,7 +1380,7 @@ export async function uploadLargeFileToTelegram(context, file, fullId, metadata,
         }
 
         // 所有分片上传成功，更新metadata
-        metadata.Channel = "TelegramNew";
+        metadata.Channel = "Telegram";
         metadata.ChannelName = tgChannel.name;
         metadata.IsChunked = true;
         metadata.TotalChunks = totalChunks;

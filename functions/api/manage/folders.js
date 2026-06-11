@@ -4,7 +4,7 @@ import { addFileToIndex, removeFileFromIndex } from '../../utils/indexManager.js
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, DELETE, OPTIONS',
+    'Access-Control-Allow-Methods': 'POST, DELETE, PATCH, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
@@ -23,6 +23,10 @@ export async function onRequest(context) {
 
     if (request.method === 'DELETE') {
         return await deleteFolder(db, env, request, corsHeaders);
+    }
+
+    if (request.method === 'PATCH') {
+        return await renameFolder(db, env, request, corsHeaders);
     }
 
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
@@ -83,20 +87,30 @@ async function createFolder(db, env, request, corsHeaders) {
             const parentExists = await db.get(parentKey);
 
             if (!parentExists) {
-                if (createParents) {
-                    // 递归创建父文件夹（会自动添加到索引）
-                    await createFolderRecursive(db, env, parentFolder);
+                // 检查是否有文件在该文件夹下（隐式文件夹）
+                const filesInParent = await db.list({ prefix: parentFolder, limit: 1 });
+                const hasFiles = filesInParent.keys.some(key => !key.name.startsWith('folder:'));
+
+                if (!hasFiles) {
+                    // 既没有文件夹记录，也没有文件，文件夹确实不存在
+                    if (createParents) {
+                        // 递归创建父文件夹（会自动添加到索引）
+                        await createFolderRecursive(db, env, parentFolder);
+                    } else {
+                        return new Response(JSON.stringify({
+                            success: false,
+                            code: 'PARENT_NOT_FOUND',
+                            error: 'Parent folder does not exist',
+                            parentFolder,
+                            hint: 'Set createParents: true to create parent folders automatically'
+                        }), {
+                            status: 400,
+                            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                        });
+                    }
                 } else {
-                    return new Response(JSON.stringify({
-                        success: false,
-                        code: 'PARENT_NOT_FOUND',
-                        error: 'Parent folder does not exist',
-                        parentFolder,
-                        hint: 'Set createParents: true to create parent folders automatically'
-                    }), {
-                        status: 400,
-                        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-                    });
+                    // 有文件但没有文件夹记录，自动创建文件夹记录
+                    await createFolderRecursive(db, env, parentFolder);
                 }
             }
         }
@@ -172,8 +186,8 @@ async function deleteFolder(db, env, request, corsHeaders) {
         const folderKey = `folder:${path}`;
 
         // 检查文件夹是否存在
-        const folderRecord = await db.get(folderKey, { type: 'json' });
-        if (!folderRecord) {
+        const folderRecord = await db.get(folderKey);
+        if (folderRecord === null) {
             return new Response(JSON.stringify({
                 success: false,
                 code: 'FOLDER_NOT_FOUND',
@@ -258,6 +272,126 @@ async function deleteFolder(db, env, request, corsHeaders) {
     }
 }
 
+async function renameFolder(db, env, request, corsHeaders) {
+    try {
+        const body = await request.json();
+        let { oldPath, newPath } = body;
+
+        // 验证参数
+        if (!oldPath || !newPath) {
+            return new Response(JSON.stringify({
+                success: false,
+                code: 'MISSING_PARAMETERS',
+                error: 'Missing required fields: oldPath and newPath'
+            }), {
+                status: 400,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+
+        // 路径规范化
+        oldPath = normalizeFolderPath(oldPath);
+        newPath = normalizeFolderPath(newPath);
+
+        if (!oldPath || !newPath) {
+            return new Response(JSON.stringify({
+                success: false,
+                code: 'INVALID_PATH',
+                error: 'Invalid folder path'
+            }), {
+                status: 400,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+
+        // 不能重命名为相同路径
+        if (oldPath === newPath) {
+            return new Response(JSON.stringify({
+                success: false,
+                code: 'SAME_PATH',
+                error: 'New path is the same as old path'
+            }), {
+                status: 400,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+
+        // 检查旧文件夹是否存在
+        const oldFolderKey = `folder:${oldPath}`;
+        const oldFolderData = await db.getWithMetadata(oldFolderKey);
+        if (!oldFolderData || oldFolderData.value === null) {
+            return new Response(JSON.stringify({
+                success: false,
+                code: 'FOLDER_NOT_FOUND',
+                error: 'Source folder not found',
+                path: oldPath
+            }), {
+                status: 404,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+
+        // 检查新路径是否已存在
+        const newFolderKey = `folder:${newPath}`;
+        const newFolderExists = await db.get(newFolderKey);
+        if (newFolderExists !== null) {
+            return new Response(JSON.stringify({
+                success: false,
+                code: 'FOLDER_EXISTS',
+                error: 'Target folder already exists',
+                path: newPath
+            }), {
+                status: 409,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+
+        // 检查新路径的父文件夹是否存在
+        const newParentFolder = getParentFolder(newPath);
+        if (newParentFolder) {
+            const parentExists = await db.get(`folder:${newParentFolder}`);
+            if (parentExists === null) {
+                return new Response(JSON.stringify({
+                    success: false,
+                    code: 'PARENT_NOT_FOUND',
+                    error: 'Parent folder does not exist',
+                    parentFolder: newParentFolder
+                }), {
+                    status: 400,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+        }
+
+        // 执行重命名
+        const result = await performFolderRename(db, env, oldPath, newPath, oldFolderData.metadata);
+
+        return new Response(JSON.stringify({
+            success: true,
+            message: 'Folder renamed successfully',
+            oldPath,
+            newPath,
+            filesUpdated: result.filesUpdated,
+            foldersUpdated: result.foldersUpdated
+        }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+
+    } catch (error) {
+        console.error('Rename folder error:', error);
+        return new Response(JSON.stringify({
+            success: false,
+            code: 'RENAME_FAILED',
+            error: 'Failed to rename folder',
+            message: error.message
+        }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+    }
+}
+
 // 辅助函数
 function getParentFolder(path) {
     if (!path || path === '/') return '';
@@ -296,3 +430,82 @@ async function createFolderRecursive(db, env, path) {
     // 添加到索引
     await addFileToIndex({ env }, path, metadata);
 }
+
+async function performFolderRename(db, env, oldPath, newPath, oldMetadata) {
+    let filesUpdated = 0;
+    let foldersUpdated = 0;
+
+    // 1. 更新文件夹记录本身
+    const newFolderName = newPath.split('/').filter(Boolean).pop();
+    const newParentFolder = getParentFolder(newPath);
+    const newMetadata = {
+        ...oldMetadata,
+        Name: newFolderName,
+        Folder: newParentFolder,
+        TimeStamp: Date.now()
+    };
+
+    const oldFolderKey = `folder:${oldPath}`;
+    const newFolderKey = `folder:${newPath}`;
+
+    await db.put(newFolderKey, '', { metadata: newMetadata });
+    await db.delete(oldFolderKey);
+
+    // 更新索引
+    await removeFileFromIndex({ env }, oldPath);
+    await addFileToIndex({ env }, newPath, newMetadata);
+    foldersUpdated++;
+
+    // 2. 更新所有子文件夹
+    const subfolders = await db.list({ prefix: `folder:${oldPath}` });
+    for (const key of subfolders.keys) {
+        if (key.name === oldFolderKey) continue; // 跳过自己
+
+        const subPath = key.name.substring(7); // 移除 "folder:" 前缀
+        const newSubPath = subPath.replace(oldPath, newPath);
+
+        const subFolderData = await db.getWithMetadata(key.name);
+        if (subFolderData && subFolderData.metadata) {
+            const updatedMetadata = {
+                ...subFolderData.metadata,
+                Folder: subFolderData.metadata.Folder.replace(oldPath, newPath)
+            };
+
+            await db.put(`folder:${newSubPath}`, '', { metadata: updatedMetadata });
+            await db.delete(key.name);
+
+            // 更新索引
+            await removeFileFromIndex({ env }, subPath);
+            await addFileToIndex({ env }, newSubPath, updatedMetadata);
+            foldersUpdated++;
+        }
+    }
+
+    // 3. 更新所有文件的 Folder 字段
+    const files = await db.list({ prefix: oldPath });
+    for (const key of files.keys) {
+        if (key.name.startsWith('folder:')) continue; // 跳过文件夹记录
+
+        const fileId = key.name;
+        const newFileId = fileId.replace(oldPath, newPath);
+
+        const fileData = await db.getWithMetadata(fileId);
+        if (fileData && fileData.metadata) {
+            const updatedMetadata = {
+                ...fileData.metadata,
+                Folder: fileData.metadata.Folder ? fileData.metadata.Folder.replace(oldPath, newPath) : ''
+            };
+
+            await db.put(newFileId, fileData.value, { metadata: updatedMetadata });
+            await db.delete(fileId);
+
+            // 更新索引
+            await removeFileFromIndex({ env }, fileId);
+            await addFileToIndex({ env }, newFileId, updatedMetadata);
+            filesUpdated++;
+        }
+    }
+
+    return { filesUpdated, foldersUpdated };
+}
+

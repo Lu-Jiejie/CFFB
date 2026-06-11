@@ -156,7 +156,6 @@ function sanitizeObject(obj) {
 
 /**
  * 验证文件元数据结构
- * 兼容早期版本数据，早期版本只有 ListType, Label, TimeStamp 字段
  * @param {Object} metadata - 文件元数据
  * @returns {{valid: boolean, error?: string}}
  */
@@ -164,42 +163,33 @@ function validateMetadata(metadata) {
   if (!metadata || typeof metadata !== 'object') {
     return { valid: false, error: 'metadata must be an object' };
   }
-  
-  // FileName 字段为可选（兼容早期版本）
+
+  // FileName 字段为可选
   if (metadata.FileName !== undefined && typeof metadata.FileName !== 'string') {
     return { valid: false, error: 'metadata.FileName must be a string if provided' };
   }
-  
+
   // 可选字段类型检查（允许 null）
   if (metadata.FileType !== undefined && metadata.FileType !== null && typeof metadata.FileType !== 'string') {
     return { valid: false, error: 'metadata.FileType must be a string' };
   }
-  
+
   if (metadata.FileSize !== undefined && metadata.FileSize !== null && typeof metadata.FileSize !== 'string') {
     return { valid: false, error: 'metadata.FileSize must be a string' };
   }
-  
+
   if (metadata.TimeStamp !== undefined && typeof metadata.TimeStamp !== 'number') {
     return { valid: false, error: 'metadata.TimeStamp must be a number' };
   }
-  
+
   if (metadata.Channel !== undefined && metadata.Channel !== null && typeof metadata.Channel !== 'string') {
     return { valid: false, error: 'metadata.Channel must be a string' };
   }
-  
+
   if (metadata.Tags !== undefined && !Array.isArray(metadata.Tags)) {
     return { valid: false, error: 'metadata.Tags must be an array' };
   }
-  
-  // 早期版本字段验证
-  if (metadata.ListType !== undefined && metadata.ListType !== null && typeof metadata.ListType !== 'string') {
-    return { valid: false, error: 'metadata.ListType must be a string' };
-  }
-  
-  if (metadata.Label !== undefined && metadata.Label !== null && typeof metadata.Label !== 'string') {
-    return { valid: false, error: 'metadata.Label must be a string' };
-  }
-  
+
   return { valid: true };
 }
 

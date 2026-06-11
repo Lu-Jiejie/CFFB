@@ -38,6 +38,7 @@
  */
 
 import { getDatabase, checkDatabaseConfig } from './databaseAdapter.js';
+import { fetchSecurityConfig } from './sysConfig.js';
 
 const INDEX_KEY = 'manage@index';
 const INDEX_META_KEY = 'manage@index@meta'; // 索引元数据键
@@ -541,61 +542,44 @@ export async function readIndex(context, options = {}) {
 
         // 渠道过滤（支持多选，OR 逻辑）
         if (channelArr.length > 0) {
-            filteredFiles = filteredFiles.filter(file => 
+            filteredFiles = filteredFiles.filter(file =>
                 channelArr.some(ch => file.metadata.Channel?.toLowerCase() === ch.toLowerCase())
             );
         }
 
-        // 列表类型过滤（黑白名单，支持多选，OR 逻辑）
-        // White=白名单, Block=黑名单, None=未设置
-        if (listTypeArr.length > 0) {
-            filteredFiles = filteredFiles.filter(file => {
-                const fileListType = file.metadata.ListType;
-                return listTypeArr.some(lt => {
-                    if (lt === 'None') {
-                        // 未设置：ListType 为空、undefined、null 或字符串 'None'
-                        return !fileListType || fileListType === '' || fileListType === 'None';
-                    }
-                    return fileListType === lt;
-                });
-            });
-        }
-
-        // 访问状态筛选（综合判断 ListType 和 Label，支持多选，OR 逻辑）
-        // 'normal' = 正常：非已屏蔽状态
-        // 'blocked' = 已屏蔽：ListType === 'Block' || (Label === 'adult' && ListType !== 'White')
-        // 注意：白名单优先，即使 Label 是 adult，只要 ListType 是 White 就是正常
+        // 访问状态筛选（基于实际访问控制规则，支持多选，OR 逻辑）
+        // 'normal' = 正常：可公开访问
+        // 'blocked' = 已屏蔽：不可公开访问
         if (accessStatusArr.length > 0) {
+            // 读取白名单模式配置
+            const securityConfig = await fetchSecurityConfig(context.env);
+            const whiteListModeEnabled = securityConfig?.access?.whiteListMode?.enabled || false;
+
             filteredFiles = filteredFiles.filter(file => {
-                const fileListType = file.metadata.ListType;
-                const fileLabel = file.metadata.Label;
-                const isBlocked = fileListType === 'Block' || (fileLabel === 'adult' && fileListType !== 'White');
+                const fileTags = file.metadata.Tags || [];
+
+                // 判断文件是否会被实际屏蔽（与 fileTools.js 逻辑一致）
+                let isBlocked = false;
+
+                // 1. 检查 blocked 标签（最高优先级）
+                if (fileTags.includes('blocked')) {
+                    isBlocked = true;
+                }
+                // 2. 检查白名单模式
+                else if (whiteListModeEnabled) {
+                    // 白名单模式：只有带 whitelist 标签的文件可访问
+                    isBlocked = !fileTags.includes('whitelist');
+                }
+                // 3. 否则不屏蔽
+                else {
+                    isBlocked = false;
+                }
 
                 return accessStatusArr.some(status => {
                     if (status === 'normal') {
                         return !isBlocked;
                     } else if (status === 'blocked') {
                         return isBlocked;
-                    }
-                    return false;
-                });
-            });
-        }
-
-        // 审查结果筛选 (label)（支持多选，OR 逻辑）
-        // 'normal' 匹配 Label 为 'everyone', 'None', '', null, undefined
-        // 'teen' 匹配 Label 为 'teen'
-        // 'adult' 匹配 Label 为 'adult'
-        if (labelArr.length > 0) {
-            filteredFiles = filteredFiles.filter(file => {
-                const fileLabel = file.metadata.Label;
-                return labelArr.some(lbl => {
-                    if (lbl === 'normal') {
-                        return !fileLabel || fileLabel === '' || fileLabel === 'None' || fileLabel === 'everyone';
-                    } else if (lbl === 'teen') {
-                        return fileLabel === 'teen';
-                    } else if (lbl === 'adult') {
-                        return fileLabel === 'adult';
                     }
                     return false;
                 });
@@ -911,11 +895,24 @@ export async function getIndexInfo(context, options = {}) {
         // 统计各渠道文件数量
         const channelStats = Object.create(null);
         const folderStats = Object.create(null);
-        const typeStats = Object.create(null);
+        const accessStats = Object.create(null);
         const uploadTrend = createUploadTrendAccumulator(index.files, options);
+
+        // 读取白名单模式配置
+        const securityConfig = await fetchSecurityConfig(context.env);
+        const whiteListModeEnabled = securityConfig?.access?.whiteListMode?.enabled || false;
+
+        const actualFiles = [];
 
         index.files.forEach(file => {
             const metadata = file.metadata || {};
+
+            // 跳过文件夹记录
+            if (metadata.Type === 'folder') {
+                return;
+            }
+
+            actualFiles.push(file);
 
             // 渠道统计
             const channel = normalizeChannel(metadata.Channel);
@@ -925,27 +922,32 @@ export async function getIndexInfo(context, options = {}) {
             const dir = metadata.Folder || extractDirectory(file.id) || '/';
             incrementStat(folderStats, dir);
 
-            // 类型统计
-            let listType = metadata.ListType || 'None';
-            const label = metadata.Label || 'None';
-            if (listType !== 'White' && label === 'adult') {
-                listType = 'Block';
+            // 访问状态统计（基于实际访问控制规则）
+            const fileTags = metadata.Tags || [];
+            let accessStatus = 'normal';
+
+            // 判断文件是否会被实际屏蔽
+            if (fileTags.includes('blocked')) {
+                accessStatus = 'blocked';
+            } else if (whiteListModeEnabled && !fileTags.includes('whitelist')) {
+                accessStatus = 'blocked';
             }
-            incrementStat(typeStats, listType);
+
+            incrementStat(accessStats, accessStatus);
 
             addUploadTrendPoint(uploadTrend, metadata, channel);
         });
 
         return {
             success: true,
-            totalFiles: index.totalCount,
+            totalFiles: actualFiles.length,
             lastUpdated: index.lastUpdated,
             channelStats,
             folderStats,
-            typeStats,
+            accessStats,
             uploadTrend: finalizeUploadTrend(uploadTrend),
-            oldestFile: index.files[index.files.length - 1],
-            newestFile: index.files[0]
+            oldestFile: actualFiles[actualFiles.length - 1] || null,
+            newestFile: actualFiles[0] || null
         };
     } catch (error) {
         console.error('Error getting index info:', error);
@@ -965,7 +967,8 @@ function incrementStat(stats, key) {
 }
 
 function normalizeChannel(channel) {
-    if (channel === 'TelegramNew') {
+    // 合并 TelegramNew 和旧版 Telegram
+    if (channel === 'TelegramNew' || channel === 'Telegram') {
         return 'Telegram';
     }
     return normalizeTrendKey(channel, 'Telegraph');

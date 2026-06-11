@@ -92,7 +92,6 @@ export async function onRequest(context) {
                 ? '白名单模式已变更。建议立即清理所有文件缓存以确保访问控制立即生效（已缓存的文件最多需要 30 天才能自动过期）。'
                 : null
         }), {
-        }), {
             headers: {
                 'content-type': 'application/json',
             },
